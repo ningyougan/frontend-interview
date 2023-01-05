@@ -1,7 +1,5 @@
 # Javascript
 
-> 以下问题来自<https://www.frontendinterviewhandbook.com/zh/javascript-questions>
-
 ## 原型继承
 
 原型继承是与虚函数表等不同的一种继承实现方式，通常出现在抽象层次较高的解释型语言中，我知道的如Javascript、Lua等。这种继承机制的特点是“链式”和对象代理。不管是继承还是组合，主要目的都在于代码复用。我们的需求是“当子类覆盖（override）了父类方法时，用子类的，没有时就用父类的，父类也没有就找父类的父类……”层层向上形成一条链路，即原型链。而我们对对象成员的访问大多数时候都可以归结为对`getter`和`setter`方法的调用，因此只要语言提供了模拟或魔改`getter`和`setter`的机制，就可以实现原型链继承。
@@ -159,3 +157,13 @@ console.log(get(proto, 'foo')); // 42
 ```
 
 ## CJS、ESM、IIFE和UMD
+
+前端的“模块机制”。
+
+## `call`、`apply`和`bind`
+
+## `let`、`const`、`var`和变量提升（hoisting）
+
+## `==`和`===`
+
+## `"use strict"`
