@@ -2,4 +2,4 @@
 
 ## DOM Diff算法
 
-## LRU算法
+## LRU

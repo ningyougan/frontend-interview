@@ -14,9 +14,9 @@
 
 ### 依赖倒置原则与双向绑定
 
-### Vue3
+### Vue3 hooks
 
-## 状态管理
+## 状态管理与DDD
 
 ## Next.js和Nuxt.js
 

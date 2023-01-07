@@ -167,3 +167,9 @@ console.log(get(proto, 'foo')); // 42
 ## `==`和`===`
 
 ## `"use strict"`
+
+## ES5、ES2015、ESNext...
+
+## 正则表达式
+
+## 函数式编程
