@@ -6,6 +6,8 @@
 
 ## `package-lock.json`和`npm ci`
 
+## `dependencies`、`devDependencies`和`peerDependencies`
+
 ## `lerna`和Monorepo
 
 ## 常见工具
