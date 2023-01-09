@@ -2,15 +2,17 @@
 
 ## 浏览器引擎渲染过程
 
+以前写过一则[阅读笔记](https://www.everseenflash.com/CS/Frontend/Browser%20Engine.md)，包括`<style>`和`<script>`在文档中位置的安排、回流重绘等内容。
+
 ## HTML
 
-### `<script>`、`<script async>`和`<script defer>`
+### `<script async>`和`<script defer>`
 
 ### `<div>`和`<span>`
 
 ### `<img>`的`srcset`属性
 
-### Reflow和Repaint
+## 窗口大小和像素比
 
 ## Ajax和`fetch`
 
