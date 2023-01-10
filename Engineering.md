@@ -4,6 +4,16 @@
 
 ## `npm`、`yarn`和`pnpm`
 
+最后讲个笑话，某天使用`npm run --help`的时候无意中看到`npm run`的别名，乐了半天：
+
+```bash
+❯ npm run --help
+
+# balabala...
+
+aliases: run, rum, urn
+```
+
 ## `package-lock.json`和`npm ci`
 
 ## `dependencies`、`devDependencies`和`peerDependencies`

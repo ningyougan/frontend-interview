@@ -282,10 +282,6 @@ ESM即ES Module，以`import`和`export`关键字为代表，常见于TS、Deno�
 
 这几种导入机制还牵涉到Tree Shaking的概念，见[这里](./PerformanceOptimization.md#H38b4ccab34e94afd)。
 
-#### 动态加载
-
-在有Polyfill辅助情况下，或者现代Web平台上，`import`也可以作为函数使用`import(filepath)`，返回的是一个`Promise`，加载成功则提供一个模块对象。
-
 ### IIFE
 
 IIFE即“立即执行函数”，本身不是模块机制，但联系紧密。在JS里面的历史相当悠久。如果非要解释它是什么，用代码表达比较好：`(() => {})()`。按照我的理解，IIFE有两大好处：
@@ -321,10 +317,15 @@ IIFE即“立即执行函数”，本身不是模块机制，但联系紧密。�
 
 }));
 ```
+### 动态加载
+
+在有Polyfill辅助情况下，或者现代Web平台上，`import`也可以作为函数使用`import(filepath)`，返回的是一个`Promise`，加载成功则提供一个模块对象。
+
+### 循环依赖
 
 ### 相互转化
 
-实践中经常需要将这些模块格式相互转化，通常是CJS和ESM之间，以及它们到其他格式的转换。可通过构建工具进行，常用的是Webpack和Rollup。在Webpack中，关键参数是[output.library](https://webpack.js.org/configuration/output/#outputlibrary)，在Rollup中类似，是[output.format](https://rollupjs.org/guide/en/#outputformat)参数，TSC也有[类似参数](https://www.typescriptlang.org/tsconfig/#module)。
+实践中经常需要将这些模块格式相互转化，通常是CJS和ESM之间，以及它们到其他格式的转换。可通过构建工具进行，当前常用的是Webpack和Rollup。在Webpack中，关键参数是[output.library](https://webpack.js.org/configuration/output/#outputlibrary)，在Rollup中类似，是[output.format](https://rollupjs.org/guide/en/#outputformat)参数，TSC也有[类似参数](https://www.typescriptlang.org/tsconfig/#module)。
 
 ## 箭头函数和`function`
 
@@ -485,9 +486,9 @@ console.log(r.exec(s))
 
 为了确保匹配内容包裹在`<div>`内使用了两个肯定环视，一个顺序一个逆序。环视的优点是不占用字符，可以用于接下来的匹配，因此在最后放了个毫无意义的`<\/div>`说明这一点；中间用`(\w+)`匹配标签名称并用反向引用`\1`匹配结束标签；使用具名分组`content`存放元素内容`RegExp`。设计和调试这个例子花了不少时间，借用一个段子：“你有一个难题，你想到了用正则表达式来解决。现在，你有两个难题了”。看过《深入理解正则表达式》的话能体会到要写出面面俱到且高性能的正则表达式并不容易，因此我更倾向于将字符串方法和小型的正则表达式结合使用，非必要不炫技。
 
-在应用`g`或`y`标志的情况下，JS的正则表达式对象是有状态的，这是个易错点，具体表现为这类正则表达式对象会记住上次匹配的位置（`r.lastIndex`），每次匹配从这个位置开始，直到越界才会重置为0。global和sticky的区别是sticky如果lastIndex位置处匹配失败，将直接返回`null`，而global会从下一个字符继续尝试，在MDN上有更详细的解释：
+在应用`g`或`y`标志的情况下，JS的正则表达式对象是有状态的，这是个易错点，具体表现为这类正则表达式对象会记住上次匹配的位置（`r.lastIndex`），每次匹配从这个位置开始，直到越界才会重置为0。_global_ 和 _sticky_ 的区别是 _sticky_ 如果`lastIndex`位置处匹配失败，将直接返回`null`，而 _global_ 会从下一个字符继续尝试，在MDN上有更详细的解释：
 
-+ 使用global：
++ 使用 _global_：
 
     ```js
     r = /a/g;
@@ -497,7 +498,7 @@ console.log(r.exec(s))
     console.log(r.exec(s).index); // 2
     ```
 
-+ 使用sticky：
++ 使用 _sticky_：
 
     ```js
     r = /a/y;
@@ -511,4 +512,4 @@ console.log(r.exec(s))
 
 这个话题太大了，如果只是从前端开发者的角度，了解一下函数作为一等公民、纯函数、副作用、惰性求值等概念的话，在Github上以`FP`为关键字搜索有几个仓库值得一读。但如果要更深刻的理解，将涉足PL领域，以及群论范畴论拓扑学等听起来就很高大上的东西，像我这种半吊子本科水平是不敢过多置喙的。
 
-以我当前的认知，我们通常学到的计算机起源是图灵等人这一脉，核心是一个非常现实的、可以在物理层面造出来的图灵机，还有一脉则来自于丘奇等人，核心是非常抽象的、完全从逻辑层面出发的Lambda演算，两个计算模型的能力已经被证明是等价的（还有一些其他图灵完备的计算模型如标签系统、生命游戏、SKI组合子演算等）。从图灵机衍生出了我们在计组课上学到的，非常机械的制造计算机的方式，而Lambda演算用函数表达计算，α变换即作用域内参数重命名，β归约即参数代入，在此基础上衍生出了Lisp、OCaml、ML、Haskell等编程语言，这些语言相对冷门但在PL领域教学研究却很常见，我用得比较多的是Lisp之Scheme之方言Racket，体会就是学得越多越觉得自己无知，从最早接触到Y组合子的惊为天人，到读《SICP》、《EOPL》时初窥门径，再到面对PL领域各论文中千奇百怪的符号时心生退缩，认识到学无止境也是件蛮痛苦的事。
+以我当前的认知，我们通常学到的计算机起源是图灵等人这一脉，核心是一个非常现实的、可以在物理层面造出来的图灵机，还有一脉则来自于丘奇等人，核心是非常抽象的、完全从逻辑层面出发的Lambda演算，两个计算模型的能力已经被证明是等价的（还有一些其他图灵完备的计算模型如标签系统、生命游戏、SKI组合子演算等）。从图灵机衍生出了我们在计组课上学到的，非常机械的制造计算机的方式，而Lambda演算用函数表达计算，α变换即作用域内参数重命名，β归约即参数代入，在此基础上衍生出了Lisp、OCaml、ML、Haskell等编程语言，这些语言相对冷门但在PL领域教学研究却很常见，我用得比较多的是Lisp之Scheme之方言Racket，学得越多对编程语言的理解越深入，同时也越觉得自己无知。从最早接触到Y组合子的惊为天人，到读《SICP》、《EOPL》时初窥门径，再到面对PL领域论文中各种千奇百怪的符号时心生无力，认识到学无止境也是件蛮痛苦的事。
