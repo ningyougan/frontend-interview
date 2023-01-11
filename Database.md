@@ -1,6 +1,8 @@
 # 前端与数据库
 
-## NoSQL
+## No SQL
+
+## GraphQL
 
 ## IndexDB
 

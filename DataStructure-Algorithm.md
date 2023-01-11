@@ -8,7 +8,7 @@
 
 ### 线性表
 
-线性表常见的技巧是双指针，其中又可以分为快慢指针和左右指针两大类。快慢指针通常根据两个指针的交汇与否判断线性表的特征，有时还需要数组有序。左右指针可以从二分法的角度理解，更多的用于滑动窗口问题。我自己总结的一套滑动窗口的极简框架如下，缺点是有时判断`shouldExpand`比较低效，改为先尽可能增大窗口，然后判断`shouldShrink`并缩小窗口比较好：
+线性表常见的技巧是双指针，其中又可以分为快慢指针和左右指针两大类。快慢指针通常根据两个指针的交汇与否判断线性表的特征，有时还需要数组有序。左右指针可以从二分法的角度理解，更多的用于滑动窗口问题。我学来的一套滑动窗口极简框架如下，思路基本都是先尽可能增大窗口，然后判断`shouldShrink`缩小窗口：
 
 ```js
 void slideWindow(str) {
@@ -16,12 +16,12 @@ void slideWindow(str) {
   let right = 0;
 
   while (left <= right && right < str.length) {
-    if (shouldExpand(left, right)) {
-      // 增大窗口
-      right++;
-    } else {
+    if (shouldShrink(left, right)) {
       // 缩小窗口
       left++;
+    } else {
+      // 增大窗口
+      right++;
     }
   }
 }

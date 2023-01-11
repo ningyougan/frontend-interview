@@ -206,8 +206,6 @@ CJS即CommonJS，主要应用于NodeJS平台，API是`module.exports`和`require
 
 `exports`和`module.exports`貌似没有什么区别，我用得也很少。
 
-#### 动态加载
-
 ### ESM
 
 ESM即ES Module，以`import`和`export`关键字为代表，常见于TS、Deno等平台。目前已逐渐成为标准和主流，较新版本的NodeJS也原生支持ESM模块，只是听说各个平台的支持之间还有一段相互背刺的历史，有微妙的差异，尚没有深入探究。

@@ -18,7 +18,7 @@ aliases: run, rum, urn
 
 ## `dependencies`、`devDependencies`和`peerDependencies`
 
-## `lerna`和Monorepo
+## Monorepo
 
 ## 常见工具
 
@@ -44,12 +44,8 @@ aliases: run, rum, urn
 
 ### TSC
 
-### Jest、Testing-Utils
-
 ### Git hooks
 
 ### Standard Version
-
-### 国际化与a11y
 
 ## Headless Browser
