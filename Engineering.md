@@ -24,6 +24,8 @@ aliases: run, rum, urn
 
 ### Webpack
 
+虽然已经2023年了还谈论Webpack显得有点不合时宜，但作为一名曾经的“Webpack API工程师”，我的私心不允许我将它放在不重要的位置:)。
+
 #### Loader和Plugin
 
 #### WDS和HMR
