@@ -4,7 +4,7 @@
 
 ## `npm`、`yarn`和`pnpm`
 
-最后讲个笑话，某天使用`npm run --help`的时候无意中看到`npm run`的别名，乐了半天：
+最后讲个笑话，某次求助`npm run --help`的时候看到`npm run`的别名，乐了半天：
 
 ```bash
 ❯ npm run --help

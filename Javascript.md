@@ -204,11 +204,16 @@ CJS即CommonJS，主要应用于NodeJS平台，API是`module.exports`和`require
 
 #### 关于`exports`
 
-`exports`和`module.exports`貌似没有什么区别，我用得也很少。
+`exports`多数时候都可以当作是`module.exports`的别名，只有完全将另一个值赋给它的时候才解除对`module.exports`的引用。印象中我几乎没有遇到过要用`exports`的地方。
+
+```js
+module.exports.hello = true; // Exported from require of module
+exports = { hello: false };  // Not exported, only available in the module
+```
 
 ### ESM
 
-ESM即ES Module，以`import`和`export`关键字为代表，常见于TS、Deno等平台。目前已逐渐成为标准和主流，较新版本的NodeJS也原生支持ESM模块，只是听说各个平台的支持之间还有一段相互背刺的历史，使两种格式相互迁移的时候存在很多[限制](https://nodejs.org/docs/latest-v14.x/api/esm.html#esm_interoperability_with_commonjs)。
+ESM即ES Module，以`import`和`export`关键字为代表，常见于TS、Deno等平台。目前已逐渐成为标准和主流，v14+的NodeJS也原生支持ESM模块，只是听说各个平台的支持之间还有一段相互背刺的历史，使两种格式相互迁移的时候存在很多[限制](https://nodejs.org/docs/latest-v14.x/api/esm.html#esm_interoperability_with_commonjs)。
 
 + `export.js`
 
@@ -237,8 +242,6 @@ ESM即ES Module，以`import`和`export`关键字为代表，常见于TS、Deno�
     console.log(foo);
     bar();
     ```
-
-    如果NodeJS直接运行报错的话，一种方法是将文件后缀改为`mjs`，NodeJS会将文件当作ES模块处理；另一种方法是使用`ts-node`，TS原生支持ESM：`npx ts-node import.js`。
 
 #### 关于`default`
 
@@ -297,8 +300,7 @@ IIFE即“立即执行函数”，本身不是模块机制，但联系紧密。�
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
   // AMD
   typeof define === 'function' && define.amd ? define(['exports'], factory) :
-  // Web，myBundle使构建umd时传入的名称，在Web环境执行后，global.myBundle变量就是加载的模块对象
-  // 看代码也能看懂，它是将global.myBundle作为factory函数的exports参数传入，而factory是一个匿名函数
+  // Web，myBundle是构建umd时传入的名称，在Web环境执行后，global.myBundle变量就是加载的模块对象
   (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.myBundle = {}));
 })(this, (function (exports) { 'use strict';
 
@@ -317,15 +319,55 @@ IIFE即“立即执行函数”，本身不是模块机制，但联系紧密。�
 ```
 ### 动态加载
 
-在有Polyfill辅助情况下，或者现代Web平台上，`import`也可以作为函数使用`import(filepath)`，返回的是一个`Promise`，加载成功则提供一个模块对象。
+`require`支持模块名是动态拼接产生的，要实现批量加载可以考虑`glob`、`globby`之类的库。在有Polyfill辅助情况下，或者现代Web平台上，`import`也可以作为函数使用`import(filepath)`，返回的是一个`Promise`，加载成功则提供一个模块对象。`import()`是实现[模块分割及懒加载](./PerformanceOptimization.md#Hb077d6089e59b828)的基础。
 
 ### 循环依赖
+
+模块加载可以说就是把模块文件执行一遍的过程，下面`a.js`和`b.js`的定义显然有循环依赖，如果执行`a.js`将会在`b.js`打印`foo`处报错，借助变量提升机制把`const`改成`var`不会有报错，只是打印的是`undefined`。
+
++ a.js
+
+    ```js
+    import { bar } from './b.js';
+
+    console.log(bar);
+
+    export const foo = 42;
+    ```
+
++ b.js
+
+    ```js
+    import { foo } from './a.js';
+
+    console.log(foo);
+
+    export const bar = 24;
+    ```
+
+如果改用成等价的CJS格式，则不会报错，但效果和变量提升类似也会在`b.js`打印`foo`处打印`undefeind`，这是因为NodeJS为了避免无限循环，会将`a.js`的一个“半成品”提供给`b.js`，其中的`foo`还未定义。
+
+但实际项目中循环依赖很容易发生，需要控制好模块加载的时序，比如将`b.js`改为如下这样：
+
+```js
+import { foo } from './a.js';
+
+import("./a.js").then(({foo}) => {
+  console.log(foo);
+});
+
+export const bar = 24;
+```
+
+执行`a`时遇到对`b`的导入，于是去执行`b`，由于`b`中对`a`的导入是异步的，`b`可以成功加载完成，随后`a`加载完成，再执行`import()`创建的微任务且因为`a`的模块[缓存](https://nodejs.org/docs/latest-v14.x/api/modules.html#modules_caching)而不需要重新导入`a`。
+
+在网上还看到CJS导入的是模块浅拷贝、ESM导入的是模块引用的说法，但是我看了很多这类文章的示例代码，总觉得是作者没有理清楚闭包捕获、JS对象展开的特性。我还是不在这个话题上发表言论了。
 
 ### 相互转化
 
 实践中经常需要将这些模块格式相互转化，通常是CJS和ESM之间，以及它们到其他格式的转换。可通过构建工具进行，当前常用的是Webpack和Rollup。在Webpack中，关键参数是[output.library](https://webpack.js.org/configuration/output/#outputlibrary)，在Rollup中类似，是[output.format](https://rollupjs.org/guide/en/#outputformat)参数，TSC也有[类似参数](https://www.typescriptlang.org/tsconfig/#module)。
 
-## 箭头函数和`function`
+## 箭头函数
 
 如前文所述，JS中的`class`不过是语法糖，在`function`函数体里面使用`this`，可以把这个函数理解成一个构造函数，`this`指向的是构造的实例对象：
 
@@ -361,7 +403,11 @@ obj = {
 }
 
 obj.bar(); // 42
+// 把obj.bar当构造函数，新建的实例和obj没有关系
+new obj.bar(); // undefined
+```
 
+```js
 obj = {
   foo: 42,
   bar: () => {
@@ -374,11 +420,13 @@ obj.bar(); // undefined
 this.foo = 24;
 
 obj.bar(); // 24
+// 箭头函数无法作为构造函数
+new obj.bar(); // TypeError: obj.bar is not a constructor
 ```
 
 ## `call`、`apply`和`bind`
 
-三者都是`Function.prototype`上的API，因此所有普通的函数都可以使用这三个方法。先说`bind`，`bind`用于创建偏函数，偏函数是来自函数式编程的一个名词，我理解为预提供部分参数创建新函数，在实践中应用相当广泛。例如OOP风格中我们可以在对象的成员函数中使用`this`指针，但通常不需要显式地传入`this`，这时每个成员函数都可以看成是带有隐含参数`this`并且已经`bind`了实例对象的偏函数，前文`self`指针的模拟给出了例子。这一点在函数式编程领域尤为重要，如果我们要将对象的成员函数作为一等公民传来传去，通常都需要手动绑定`this`：
+三者都是`Function.prototype`上的API，因此所有普通的函数都可以使用这三个方法。先说`bind`，`bind`用于创建偏函数，偏函数是来自函数式编程的一个名词，我理解为预提供部分参数创建新函数，例如OOP风格中我们可以在对象的成员函数中使用`this`指针，但通常不需要显式地传入`this`，这时每个成员函数都可以看成是带有隐含参数`this`并且已经`bind`了实例对象的偏函数，前文`self`指针的模拟给出了例子。这一点在函数式编程领域尤为重要，如果我们要将对象的成员函数作为一等公民传来传去，通常都需要手动绑定`this`：
 
 ```js
 class Demo {
@@ -482,7 +530,7 @@ s = `
 console.log(r.exec(s))
 ```
 
-为了确保匹配内容包裹在`<div>`内使用了两个肯定环视，一个顺序一个逆序。环视的优点是不占用字符，可以用于接下来的匹配，因此在最后放了个毫无意义的`<\/div>`说明这一点；中间用`(\w+)`匹配标签名称并用反向引用`\1`匹配结束标签；使用具名分组`content`存放元素内容`RegExp`。设计和调试这个例子花了不少时间，借用一个段子：“你有一个难题，你想到了用正则表达式来解决。现在，你有两个难题了”。看过《深入理解正则表达式》的话能体会到要写出面面俱到且高性能的正则表达式并不容易，因此我更倾向于将字符串方法和小型的正则表达式结合使用，非必要不炫技。
+为了确保匹配内容包裹在`<div>`内使用了两个肯定环视，一个顺序一个逆序。环视的优点是不占用字符，可以用于接下来的匹配，因此在最后放了个毫无意义的`<\/div>`说明这一点；中间用`(\w+)`匹配标签名称并用反向引用`\1`匹配结束标签；使用具名分组`content`存放元素内容`RegExp`。设计和调试这个例子花了不少时间，借用一个段子：“你有一个难题，你想到了用正则表达式来解决。现在，你有两个难题了”。之前看过一本《Introduce Regular Expressions》，能体会到写出面面俱到且高性能的正则表达式之不易，因此我更倾向于将字符串方法和小型的正则表达式结合使用，非必要不炫技。
 
 在应用`g`或`y`标志的情况下，JS的正则表达式对象是有状态的，这是个易错点，具体表现为这类正则表达式对象会记住上次匹配的位置（`r.lastIndex`），每次匹配从这个位置开始，直到越界才会重置为0。_global_ 和 _sticky_ 的区别是 _sticky_ 如果`lastIndex`位置处匹配失败，将直接返回`null`，而 _global_ 会从下一个字符继续尝试，在MDN上有更详细的解释：
 

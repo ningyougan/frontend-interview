@@ -1,6 +1,6 @@
 # Frontend Interview
 
-前端面试前结合搜罗的各种面试问题对自身知识体系进行的一次梳理，难免有力所未逮的地方，~都是肺腑之言~。有更深入的理解也将不定期更新。
+前端面试前结合搜罗的各种面试问题对自身知识体系进行的一次梳理，难免有力所未逮的地方。有更深入的理解也将不定期更新。
 
 [[仓库地址](https://github.com/EverSeenTOTOTO/frontend-interview)] [[在线访问](https://cv.everseenflash.com/)]
 

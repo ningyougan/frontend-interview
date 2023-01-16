@@ -352,10 +352,9 @@ TS中直接体现类型父子关系的无疑是Conditional Types，官方文档�
     type f2 = () => bar;
 
     type x = (f1 | f2) extends () => infer U ? U : never; // foo | bar
-    type y = (foo[] | bar[]) extends (infer U)[] ? U : never; // foo | bar
     ```
 
-    理解这一点可以解释很多TS不符合预期的行为，这是查资料时无意间看到的一个[Issue](https://github.com/microsoft/TypeScript/issues/46579)：
+    这一点可以解释很多TS不符合预期的行为，也可以帮助我们判断一个类型变换是协变还是逆变的，这是查资料时无意间看到的一个[Issue](https://github.com/microsoft/TypeScript/issues/46579)：
 
     ```ts
     type transform<T, P> = ([T] | [P]) extends [infer U] ? U : never;
@@ -534,7 +533,7 @@ export type intersect_to_tuple<I> = get_subsets<union_to_tuple<I>> extends infer
   : never;
 ```
 
-好吧，我承认当前TSC还不支持这么深的函数堆栈，也许要把这个实现进一步优化，尤其是尾递归优化后才能应用于现实中的工程，但分步进行的话证实这个思路是可行的：
+好吧，我承认当前TSC还不支持这么深的函数堆栈，也许要把这个实现进一步优化，尤其是借助尾递归优化后才能应用于现实工程，但分步进行的话证实这个思路是可行的：
 
 ```ts
 type r = intersect_to_tuple<intersect>; // Type instantiation is excessively deep and possibly infinite.
@@ -543,14 +542,7 @@ type r = intersect_to_tuple<intersect>; // Type instantiation is excessively dee
 type s = get_subsets<union_to_tuple<keyof intersect>>; // type s = [["foo"], ["foo", "bar"], ["bar"]]
 type o = get_objtypes<intersect, s>; // ...
 type c = get_subsets<o>; // ...
-/*
-type t = [{
-    foo: 42;
-}, {
-    bar: "hello ts";
-}]
-*/
-type t = i2t_helper<intersect, c>;
+type t = i2t_helper<intersect, c>; // type t = [foo, bar]
 ```
 
 ## 单元测试
