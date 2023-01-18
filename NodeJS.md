@@ -92,7 +92,7 @@ loading d.js
 hello world
 ```
 
-不过NodeJS长期将这种机制标记为废弃，并明确指出会降低性能或造成微妙的BUG。在ESM模块中，NodeJS又提供了一套目前还是测试阶段的[Loader API](https://nodejs.org/docs/latest-v14.x/api/esm.html#esm_loaders)。
+不过NodeJS长期将这种机制标记为废弃，并明确指出会降低性能或造成微妙的BUG。在ESM模块中，NodeJS又提供了一套实验性的[Loader API](https://nodejs.org/docs/latest-v14.x/api/esm.html#esm_loaders)，我还没有用过。
 
 ## `spawn`、`fork`和`exec`
 
@@ -107,7 +107,7 @@ execve("/bin/echo", args, envp); // hello world
 printf("will not print because current process is replaced");
 ```
 
-而`child_process`的`exec`只不过是在子进程中运行shell。如果要执行的本身就是个可执行文件，还可以跳过shell这一层，直接使用`execFile`执行，获得少量的性能提升。
+而child_process的`exec`只不过是在子进程中运行shell。如果要执行的本身就是个可执行文件，还可以跳过shell这一层，直接使用`execFile`执行，获得少量的性能提升。
 
 虽然名字是`fork`，但`fork`和POSIX系统调用`fork(2)`也截然不同，`fork(2)`会克隆当前进程的内存空间，因此才有关于`fork`的经典问题：
 
@@ -178,7 +178,7 @@ if (schedulingPolicy !== SCHED_RR ||
 }
 ```
 
-`handle`是服务器资源及调度算法的抽象，`SCHED_RR`为非Windows平台的默认调度策略，因此`handle`实际只存在于主进程中。`RoundRobinHandle`即默认处理TCP连接的模式，而UDP协议及Windows平台则使用`SharedHandle`，这是因为UDP协议是无连接协议，而Windows是平台API自身的问题（可以在注释中看到），采用`SharedHandle`意味着套接字也由主进程创建，但会发送给子进程，由子进程自己去做Accept连接等一众动作。这变相相当于把调度权交给了操作系统的进程调度，按照NodeJS文档的[说法](https://nodejs.org/docs/latest-v14.x/api/cluster.html#cluster_how_it_works)，性能可能还不如RR模式。
+`handle`是服务器资源及调度算法的抽象，`SCHED_RR`为非Windows平台的默认调度策略，因此`handle`实际只存在于主进程中。`RoundRobinHandle`即处理TCP连接的默认模式，而UDP协议及Windows平台则使用`SharedHandle`，这是因为UDP协议是无连接协议，而Windows是平台API自身的问题（可以在注释中看到），采用`SharedHandle`意味着套接字也由主进程创建，但会发送给子进程，由子进程自己去做Accept连接等一众动作。这变相相当于把调度权交给了操作系统的进程调度，按照NodeJS文档的[说法](https://nodejs.org/docs/latest-v14.x/api/cluster.html#cluster_how_it_works)，性能可能还不如RR模式。
 
 worker_threads我将其看成Web Worker在NodeJS中的等价物，按照文档的说法，worker_threads适用于CPU密集型任务，对IO密集型任务的提升并不比NodeJS其他基于libuv的异步API大。翻看worker_threads的源码能看到worker_threads的和`spawn('node')`非常相似，工作线程也有自己的v8实例和事件循环，只是创建工作线程比起创建进程来说要更轻量一点。不过频繁、大量创建线程的开销也是不可接受的，实践中往往需要线程池。
 
@@ -217,13 +217,13 @@ worker_threads与child_process和cluster的区别是主线程和工作线程之�
 
 ## 守护进程
 
-守护进程是个较普遍的需求，如果在shell里运行程序，一般shell会等待子进程退出才可以交互，很多时候我们希望程序运行在后台，并且即使shell进程退出了也不会影响到该程序的继续运行（这意味着创建的子进程之父不能是shell进程，而应该是其他的存活时间更长的进程，在Linux上通常是init进程）。
+守护进程是个较普遍的需求，如果在shell里运行程序，一般shell会等待子进程退出才可以交互，很多时候我们希望程序运行在后台，并且即使shell进程退出了也不会影响到该程序的继续运行（这意味着创建的子进程之父不能是shell进程，而应该是其他存活时间更长的进程，在Linux上通常是init进程）。
 
 在Linux中可以使用`nohup`命令创建守护进程，不过作为前端开发者我用得比较多的无疑是`pm2`，要自己实现的话可参考POSIX API`daemon(3)`。
 
 ## stream
 
-“流”这个名词出现太多次了，以至于如果问我到底什么是“流”我觉得我答不上来。我倾向于把“流”当作是一种“抽象”，当出于性能或其他考虑，不是对事物的整体进行处理，而是一次处理一点点的时候，流这个概念就应运而生了。它可以是利用有限缓冲区处理大文件的文件流、亦或是在迭代器与生成器抽象上实现的生产者、甚至是《SICP》中那种利用惰性求值实现的工厂函数。NodeJS中的流以第一类字节流居多，出于本身的高度抽象有好用的一面，但自己封装流时说实话糟糕的API设计也总让我困惑。
+“流”这个名词出现太多次了，以至于如果问我到底什么是“流”我觉得我答不上来。我倾向于把“流”当作是一种“抽象”，当出于性能或其他考虑，不是对事物的整体进行处理，而是一次处理一点点的时候，流这个概念就应运而生了。它可以是利用有限缓冲区处理大文件的文件流、亦或是在迭代器与生成器抽象上实现的生产者、甚至是《SICP》中那种利用惰性求值实现的工厂函数。NodeJS中的流以第一类字节流居多，出于本身的高度抽象有好用的一面，但自己封装流时说实话糟糕的API设计也总让我迷惑。
 
 steam模块提供了三种流的抽象：可读流`Readable`、可写流`Writable`以及双工流`Duplex`，还有一种转换流`Transform`建立在`Duplex`的抽象之上。
 
