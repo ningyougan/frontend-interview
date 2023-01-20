@@ -105,15 +105,131 @@ Monorepo管理工具通常会提供如下功能：
 
 #### Loader和Plugin
 
-Loader主要指明Webpack该如何加载某一类型的文件，而Plugin利用Webpack暴露出来的事件钩子可以实现非常丰富多彩的功能，两者的职责有一定重叠之处。
+Webpack以模块为基础单位，在内部会建立模块依赖关系图并分析构建次序。但Webpack默认只内置了对js、json等基础文件类别的Loader，Webpack@5补充了对常见图片、字体格式的支持但依然不足以满足前端丰富生态的需要。Loader就是用来做这个事情的，通过`module.rules`配置Loader并指明Webpack该如何处理某一类型的文件以及把它们转化为模块。而Plugin利用Webpack暴露出来的事件钩子可以实现更花里胡哨的功能，两者的职责确实有一定重叠之处。要自己实现的话，Loader接口在[这里](https://webpack.js.org/api/loaders/)，Plugin接口在[这里](https://webpack.js.org/api/compiler-hooks/)，实际上挺不完善的，尤其是Webpack@4，经常需要结合打印出来的各种信息及源码去推测API的行为。
+
+很多时候一类文件要添加多个Loader依次处理，比如下面的例子：
+
+```js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.s[ac]ss$/i,
+        use: [
+          "style-loader",
+          "css-loader",
+          "sass-loader",
+        ],
+      },
+    ],
+  },
+};
+```
+
+Loader应用的顺序默认与声明的顺序是相反的。这里先由`sass-loader`将`.sass`或`.scss`文件处理为CSS，然后由`css-loader`处理导入的CSS模块，再由`style-loader`将输出的CSS代码以`<style>`标签的形式注入到DOM中。显然这个顺序是不可以乱掉的。如果真需要手动调整Loader应用的顺序，可参考[Rule.enforce](https://webpack.js.org/configuration/module/#ruleenforce)选项。
+
+#### Resolve
+
+Resolve控制Webpack如何进行模块解析，和模块解析有关的比如路径别名、文件类型支持、解析算法查找过程都在这个范围内。Resolve模块背后是[enhanced-resolve](https://github.com/webpack/enhanced-resolve)这个包，建立在Tapable之上，基本可以看作是一个功能更强也更复杂的[`require.resolve`](https://nodejs.org/docs/latest-v14.x/api/modules.html#modules_require_resolve_request_options)实现。假如我们要实现类似http import或者glob import之类的功能，就可以从Resolve插件入手。
 
 #### WDS和HMR
 
+WDS的原理说简单也挺简单的，用FS Watcher监听本地文件变更，用Web Socket实现服务端推送。源码主体就一个文件，核心是两个中间件`webpack-dev-middleware`和`webpack-hot-middleware`，前者拉起一个Webpack实例进行构建，构建结果直接存放在内存文件系统中，后者用于实现HMR，即所谓的“模块热重载”。要我说，都能监听和推送文件变更了，实现个模块热插拔真没啥可讲的。稍微有点意思的可能是[`react-refresh`](https://www.npmjs.com/package/react-refresh)这种东西，但很多时候我又不需要组件在刷新时还保持状态，所以用的比较少。
+
+#### Optimization
+
+Webpack默认的构建优化配置已经很完善了，一般很少动Optimization配置，最多是将`minimize`设置为`false`以观察构建产物的内容。Optimization最主要的配置项可能是`splitChunks`，控制构建产物chunks的质量和数量，因为和应用加载时的脚本解析时间与网络请求数挂钩，将直接影响到应用性能。比如Webpack默认会将`node_modules`下的依赖打包到同一个文件`vendor`里，在项目外部依赖较多时可能出现几MB的`vendor`，严重影响性能，有时还需要进一步划分。
+
+#### Devtools
+
+Devtools主要控制Source Map的生成，Source Map在性能优化这里有单独的一节[介绍](./PerformanceOptimization.md#H205b751bbde92ea0)。
+
+#### Externals
+
+Externals也是比较常用的一个配置项，被标记为External的模块其源码并不会被Webpack打包到构建产物中，因此别人使用构建产物的时候需要自己安装并注入这些模块。External模块的角色对构建产物来说类似于静态链接库。假如我们正在开发一个基于Vue的组件，是不大可能把Vue源码也打包到组件产物中的，不仅避免臃肿和浪费磁盘空间，也避免各组件“自备”一套Vue实现可能产生的各种问题。
+
+关于Externals我还想起一个Webpack的BUG，综合性很强，我花了整整一个下午才找到问题的根源。找出原因之后可以用如下简化的`main.js`文件及`webpack.config.js`复现问题：
+
++ main.js
+
+    ```js
+    import('./lazy')
+    ```
+
++ webpack.config.js
+
+    ```js
+    module.exports = {
+      mode: 'development',
+      entry: './main.js',
+      output: {
+        chunkFilename: '[name].[contenthash:8].js'
+      },
+      externals: /lazy/,
+    }
+    ```
+
+此时进行构建，将得到牛头不对马嘴的报错`Cannot convert undefined or null to object`：
+
+```bash
+
+❯ npx webpack
+Version: webpack 4.46.0
+Entrypoint main =
+[./lazy] external "./lazy" 42 bytes {main} [built]
+[./main.js] 17 bytes {main} [built]
+
+ERROR in chunk main [entry]
+Cannot convert undefined or null to object
+
+ERROR in chunk main [entry]
+main.js
+Cannot convert undefined or null to object
+```
+
+如果将`main.js`中的导入改为同步导入，或者让`webpack.config.js`中`output.chunkFilename`配置不要使用`contenthash`占位符，就可以解决问题。错误的原因其实挺好理解，当试图给异步模块`lazy`的构建产物计算`contenthash`时，由于`lazy`恰好被标记为`externals`，压根没参与打包，就没有所谓的`contenthash`可言了，若同步加载通常不会生成额外chunk文件刚好跳过了这段逻辑。解决之道在于别让External模块成为chunk中的唯一模块，是也别计算`contenthash`。Webpack@5貌似已经修复了这个问题。
+
+真实情况当然要复杂很多，上面给出的`output.chunkFilename`其实是`@vue/cli@3`的默认配置，我们有一个项目模板基于`@vue/cli@3`，某业务开发团队同事使用该项目模板时遭遇此问题，提交Issue之后我感到非常奇怪，因为这个模板已经存在很久了一直蛮正常的，我自己现场克隆仓库也没复现问题。于是和该同事沟通确实能100%复现并给了个分支给我们，对方拉取模板之后作了一些变更，但只是写了些业务代码，也没有动过构建配置，看起来和其他使用该模板的应用别无二致。那就没什么办法了，先用`git bitsect`和“控制变量法”找到最早出问题的变更，比对更改，各种尝试大致推断出和某模块引入与否（其实是代码规模）有关，再根据报错信息尝试去找Webpack中出错的源头，然而`Cannot convert undefined or null to object`甚至不是Webpack源码的一部分，而是JS的一个常见报错，比如`Object.keys(undefined)`，因此想到从Webpack的统计信息查起，以`webpack/lib/Stats.js`为起点通过打印日志一点点往上找，在`stats.toJson`函数适当位置添加`console.log(compilation.errors)`才算有了点眉目，原始的报错堆栈其实是这样：
+
+```
+ChunkRenderError: Cannot convert undefined or null to object
+    at Compilation.createHash (/node_modules/webpack/lib/Compilation.js:1981:22)
+    at /node_modules/webpack/lib/Compilation.js:1386:9
+    at AsyncSeriesHook.eval [as callAsync] (eval at create (/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:6:1)
+    at AsyncSeriesHook.lazyCompileHook (/node_modules/tapable/lib/Hook.js:154:20)
+    at Compilation.seal (/node_modules/webpack/lib/Compilation.js:1342:27)
+    at /node_modules/webpack/lib/Compiler.js:675:18
+    at /node_modules/webpack/lib/Compilation.js:1261:4
+    at AsyncSeriesHook.eval [as callAsync] (eval at create (/node_modules/tapable/lib/HookCodeFactory.js:33:10), <anonymous>:15:1)
+    at AsyncSeriesHook.lazyCompileHook (/node_modules/tapable/lib/Hook.js:154:20)
+    at Compilation.finish (/node_modules/webpack/lib/Compilation.js:1253:28)
+```
+
+从`Compilation.createHash`开始将添加打印日志和盲猜出错可能并修改配置验证结合起来，又过去很长时间，中途一度自闭到想放弃，应该说最终能找出问题本质有很大的运气成分，也多亏Webpack源码没有压缩混淆。Issue上我给出的复盘如下：
+
+1. 我们在`@vue/cli`配置的基础上，对Webpack的`splitChunks`配置及`externals`配置做了进一步修改，一些模块会被打包到同一个chunk里面去以减少网络请求数，还有些模块被设置为`externals`由App原生缓存预拉取；
+2. 该项目有两个异步模块A和B刚好被归类到同一个`cacheGroup`内，不过模块A被标记为`externals`，所以产物chunk里面只有模块B，`contenthash`也是根据B计算的；
+3. 最近一次变更模块B新增了很多内容，超出了该`cacheGroup`的文件大小要求，现在该`cacheGroup`只有模块A，而模块A又是个`externals`依赖，于是寄了；
+4. 问题难以定位一来是因为该报错会打断Webpack构建，没有构建产物可以分析比对，而业务开发团队的行为一切正常；另外就是那个让人摸不着头脑的报错信息，以及Webpack对出错信息的处理掩盖了最初的错误堆栈，进一步增加了排查难度……
+5. 为了减少影响面，同时也考虑到他们这个场景其实有很多巧合，我给出的修复方案是在该项目内对`splitChunks.cacheGroups`配置稍作修改，覆盖模板项目的默认配置，后面模板项目迭代的时候再将相应配置调整集成进去。
+
 #### Webpack5
+
+Webpack4到Webpack5的变化并不是很大，做Migration也不麻烦，我觉得比较值得关注的变更有这几点：
+
+1. 内置了对常见图片、字体格式的支持，不再需要去配置`url-loader`和`file-loader`；
+2. 缓存算法、Tree Shaking算法的改进，尤其是对CJS包Tree Shaking的部分支持。
+3. Module Federation，独立构建，联合部署，站在更高的角度看到应用和组件，思路并不新鲜，甚至可以说有点老套。在微前端领域可能会有点作用；
+
+坊间传闻某些场景Webpack5甚至比Webpack4还要慢，也不知道是不是真的。更重要的是同一时期Vite火起来了。
 
 ### Rollup
 
+能理解Webpack就不难理解Rollup，很多构建工具的概念并非Webpack独享，在Rollup那都能找到对应物。插件配置得当，让两者的行为看起来完全相同也是可以的。唯一一个我想到必须得使用Rollup的地方可能是Webpack@4不支持输出ESM格式的包。
+
 ### Vite、Turbopack
+
+“天下苦Webpack久矣”
 
 ### Babel、SWC、Esbuild
 
