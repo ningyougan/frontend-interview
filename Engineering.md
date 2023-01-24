@@ -218,20 +218,54 @@ ChunkRenderError: Cannot convert undefined or null to object
 Webpack4到Webpack5的变化并不是很大，做Migration也不麻烦，我觉得比较值得关注的变更有这几点：
 
 1. 内置了对常见图片、字体格式的支持，不再需要去配置`url-loader`和`file-loader`；
-2. 缓存算法、Tree Shaking算法的改进，尤其是对CJS包Tree Shaking的部分支持。
-3. Module Federation，独立构建，联合部署，站在更高的角度看到应用和组件，思路并不新鲜，甚至可以说有点老套。在微前端领域可能会有点作用；
+2. 缓存算法、Tree Shaking算法的改进，尤其是对CJS包Tree Shaking的部分支持；
+3. Module Federation，独立构建，联合部署，站在更高的角度看待应用和组件，思路并不新鲜，甚至可以说有点老套。在微前端领域可能会有点作用。
 
 坊间传闻某些场景Webpack5甚至比Webpack4还要慢，也不知道是不是真的。更重要的是同一时期Vite火起来了。
 
 ### Rollup
 
-能理解Webpack就不难理解Rollup，很多构建工具的概念并非Webpack独享，在Rollup那都能找到对应物。插件配置得当，让两者的行为看起来完全相同也是可以的。唯一一个我想到必须得使用Rollup的地方可能是Webpack@4不支持输出ESM格式的包。
+能理解Webpack就不难理解Rollup，很多构建工具的概念并非Webpack独享，在Rollup那都能找到对应物。插件配置得当，让两者的行为看起来完全相同也是可以的。唯一一个我想到必须得使用Rollup的地方可能是Webpack@4不支持输出ESM格式的包。此外Rollup很轻量，适合构建组件，而Webpack构建生产级前端应用的能力是得到了时间验证的，构建大型应用一般优先考虑Webpack。
 
-### Vite、Turbopack
+### Vite
 
-“天下苦Webpack久矣”
+“天下苦Webpack久矣”这话真不是开玩笑。Webpack成熟、稳定但也复杂、臃肿，如果项目庞大且磁盘性能不佳，冷启动一次动辄1分多种的耗时着实让人抓狂。Vite吸取了Webpack等构建工具的诸多教训，构建于Rollup之上，将“按需加载”的思想应用到开发服务器中，同时复用了Esbuild这类系统编程语言开发的编译构建工具，获得了相当大的性能改进以及与之适配的成功。对于常在前端工程化领域折腾的人来说，Vite还有一些顺应技术发展而生的特性，确实方便：
+
+1. 默认对TS配置文件的支持与配置变更后的自动重载，在Webpack时代我通常是借助[nodemon](https://www.npmjs.com/package/nodemon)之类的工具实现；
+2. 对SSR支持的重视，在我心里SSR是前端渲染技术发展的必由之路，相比之下在Webpack中实现SSR会麻烦一点；
+3. 核心功能围绕ESM模块而非是CJS模块展开，顺应ECMA标准与前端生态的发展。
+
+不过，Vite的核心能力是它的开发服务器来，构建时也聚焦于构建前端应用，因此假如要行使构建工具的其他功能比如CJS Bundler，也就是通过Vite去使用其底层的Rollup或Esbuild的功能，还需要额外做一些配置，这种情况下可能还是直接使用Webpack、Rollup更好些。
+
+2022年社区还推出了Turborepo和Turbopack，沾染了前端工程化工具时下流行的风气，使用Rust开发，号称比Vite还快引得尤大下场辟谣。我之前去它们的官网看了下还只是个雏形，作为构建工具来说缺胳膊少腿的，也不知道是不是又一个卷绩效搞出的东西，暂且保持观望态度。
 
 ### Babel、SWC、Esbuild
+
+Babel是一个JS的转译器，也即在生成AST之后没有生成IR生成Binary这样的步骤，而是依然转换为JS，通常是兼容性更广泛的JS代码。将使用ES6标准编写的代码转换为ES5或更早标准以便在IE 8、Android 6这样的平台上运行是Babel的主要功能之一，其他各种功能大多数是基于AST而来。
+
+Babel基于[Acorn](https://github.com/acornjs/acorn)，并在[ESTree](https://github.com/estree/estree)基础上建立了自己的AST标准，说到底就是个递归下降的编译器前端，而且代码很烂，像对TS和JSX的支持都有强耦合的成分，魔改自由度非常低。我之前突发奇想打算修改语法实现类似Python那样的列表表达式，根据官方的Contribute指南折腾了两天，在得到自定义的AST之后就光速失去了兴趣。无怪去年传出团队不合的新闻。
+
+梳理了一些Babel重点概念：
+
+#### Plugin和Preset
+
+Babel的代码转换功能以Plugin的形式提供，Preset则是内聚在一起以提供特定功能的插件集合。例如`@babel/preset-react`，由`@babel/plugin-syntax-jsx`、`@babel/plugin-transform-react-jsx`等插件组成，前者开启内置的JSX编译支持，后者转换为合适的React API。
+
+#### `core-js`和polyfill
+
+`core-js`是ECMA Script最新API标准的ES5实现。Babel虽然可以将ES6以上的语法转译为ES5，但为了提高转译速度，可以不转译标准中的一些新API，比如如`Promise`、`Array.from`等，然后采用预先导入`core-js`对应实现的方式去执行Babel转译后的代码。早期的时候为了省事可以直接导入`@babel/polyfill`（内置了`core-js`和`regenerator-runtime`），Babel 7.4.0之后`@babel/polyfill`已经废弃，官方的建议是导入`core-js/stable`，不过polyfill代码比起原生实现通常更低效，即使GZip后也有100多KB，占用加载时间，既然并非所有平台都需要polyfill，通常会根据用户机型按需加载。
+
+`core-js`也是学习ECMA Script标准的好方法，虽说里面的代码继承了早期JS的各种糟粕，全局变量漫天飞……我就干过参考`core-js`在Lua中模拟`Promise`的[事儿](https://github.com/EverSeenTOTOTO/async-await-in-lua)，但我还没有掌握真正在Lua中实现并行（执行宏任务微任务）的技术，创建多个Lua虚拟机可以，但这样两个虚拟机之间只能交换一些便于序列化的内容，不好传递函数闭包，也许还是得完整模拟事件循环。
+
+#### `@babel/preset-env`
+
+`@babel/preset-env`提供了Babel最主要的用例：提供对较新ECMA Script标准的转换支持。稍微值得一提的是配置项中的`include`和`exclude`，Babel和构建工具一起使用时，可能存在Babel处理后的代码新增了导入`core-js`模块的语句，构建工具检测到新模块再次交给Babel进行打包造成循环依赖并导致生成的代码执行出错的情况，这时可要借助`include`或`exclude`控制Babel处理的范围，其他一些已是ES5的代码也可以跳过转译以加快转译速度。
+
+#### `@babel/plugin-transform-runtime`
+
+由Babel转译的代码存在一些普遍使用的工具函数，例如实现继承的`_extend`、实现Generator的`regenerator`等，如果在每个生成的每份代码中都包含一遍这些工具函数的实现，无疑是很大的浪费，`@babel/plugin-transform-runtime`就是用来解决这个问题的，其中搜集了所有转译代码会用到的工具函数，在Babel转译后用到这些方法的地方，直接导入`@babel/plugin-transform-runtime`的相应实现就可以了。构建工具或者平台的模块机制一般能够确保这些代码仅被加载一次。
+
+Babel很好用，但毕竟是JS实现的编译器前端，有个明显的不足就是速度慢，Babel加Webpack简直是开发者噩梦。因此陆续出现了使用系统编程语言编写的同质工具SWC和Esbuild。SWC比较纯粹，使用Rust编写，目的就是能无痛替换掉Babel；Esbuild使用Go编写，野心不小，目的是一个Universal Bundler。我的工作实践是，考虑到Babel久经考验以及转译为ES5或更早标准的需要，在生产构建时使用Babel，在开发阶段使用Esbuild或SWC。
 
 ### Eslint、Stylelint
 
