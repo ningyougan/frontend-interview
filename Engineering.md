@@ -42,14 +42,14 @@ Semver规范和npm等依赖管理工具结合起来时有很多注意点，其�
 2. 不使用`package.json`中未明确声明的依赖或某版本新功能，不对`node_modules`的结构抱有任何额外假设；
 3. `package-lock.json`始终保持与`package.json`相匹配且总是提交到Git仓库，判断`package-lock.json`是否为最新的方法是执行`npm install`看`package-lock.json`有没有变更；
 4. 不同分支同时变更项目依赖，合并时容易造成`package-lock.json`大范围的冲突，我的解决方法一般是找到两者变更之前的`package-lock.json`，手动执行`npm install`，或者基于一方的`package-lock.json`再施加另一方的变更。无论采取哪一种最后都需要对功能回归测试；
-5. `npm install pkg@version`之后在`package.json`中会生成`^version`这样范围式的版本，通常我会尽可能修改为确定的版本，上生产环境的内容要的不是新潮而是稳定。缺点当然也有，容易造成依赖树的臃肿，例如两个范围声明`^2.6.1`、`^2.6.2`在依赖树根目录下安装一个`2.6.2`版本就够用了，而两个具体声明`2.6.1`、`2.6.2`则无法扁平化；
+5. `npm install pkg@version`之后在`package.json`中会生成`^version`这样范围式的版本，通常我会尽可能修改为确定的版本，上生产环境的内容要的不是新潮而是稳定。缺点当然也有，容易造成依赖树的臃肿，例如两个范围声明`^2.6.1`、`^2.6.2`在依赖树根目录下安装一个`2.6.2`版本就够用了，也保证了单例，而两个具体声明`2.6.1`、`2.6.2`则无法扁平化；
 6. 优先使用`npm ci`以便获得项目过去预期的行为。
 
 ## `dependencies`、`devDependencies`和`peerDependencies`
 
-`dependencies`和`devDependencies`从语义上来说，一个代表开发调试依赖，通常是Webpack、Eslint之类的东西，一个代表运行时依赖，例如Vue、React等。但实际上放在哪里影响不大，npm安装依赖时默认会把它的`dependencies`和`devDependencies`都安装，只有明确使用了`--production`的时候才仅安装`dependencies`。
+`dependencies`和`devDependencies`从语义上来说，一个代表开发调试依赖，通常是Webpack、ESLint之类的东西，一个代表运行时依赖，例如Vue、React等。但实际上放在哪里影响不大，npm安装依赖时默认会把它的`dependencies`和`devDependencies`都安装，只有明确使用了`--production`的时候才仅安装`dependencies`。
 
-`peerDependencies`在开发组件时经常会用到，通常指代一些需要宿主应用注入给我们的依赖，比如某Vue组件库，组件库运行时的Vue应该由宿主应用提供而非定死在`dependencies`内。由于安装后在宿主应用的`package.json`及依赖树内，我们与我们所需的依赖是并列的，故得名peer。
+`peerDependencies`在开发组件时经常会用到，指代一些需要宿主应用注入给该组件的依赖，比如某Vue组件库，组件库运行时的Vue应该由宿主应用提供而非定死在`dependencies`内。由于安装后在宿主应用的`package.json`及依赖树内，该组件与该组件声明的`peerDependencies`是并列的，故得名peer。
 
 考虑这样一个情形：宿主应用使用了依赖A，A又有一个依赖B，我们记为B1，并且B1声明在A的`dependencies`或`devDependencies`内，那么宿主应用安装A的时候会连带着安装B1，并且存在一定几率在扁平化依赖后B1直接位于依赖树的顶层，即`node_modules`的根目录下。假如宿主应用开发者不加留意，在项目中使用了B1：`require('B')`，由于B1在`node_modules`根目录下，根据NodeJS的[解析规则](https://nodejs.org/api/modules.html#all-together)这时不会报错；但未来某一天宿主应用自己也需要安装B，或者通过引入依赖C间接又引入了B，我们记为B2，好巧不巧B2与B1是Semver不兼容的，那么扁平化之后很可能（若A自己引入B2，则必定）存在于`node_modules`之下的是B2，而B1位于A的`node_modules`下：
 
@@ -62,7 +62,7 @@ Semver规范和npm等依赖管理工具结合起来时有很多注意点，其�
   + B2
 ```
 
-这时原先建立在B1假设之上的代码就会出问题。为了避免这种情形，除了我们要注意不使用未声明的依赖之外，对这些组件库来说可能它们的最佳实践是将Vue这种外部依赖声明为`peerDependencies`，然后由宿主应用统筹兼顾所用到各组件的`peerDependencies`，找出能符合各自需求的一个版本并安装之，甚至是自己魔改的版本，这给了宿主应用很多的自由度。但换个角度想，这是把一部分依赖管理的工作转交给了宿主应用的开发者，显得极不可靠。
+这时原先建立在B1假设之上的代码就会出问题。为了避免这种情形，除了我们要注意不使用未声明的依赖之外，对这些组件库来说可能它们的最佳实践是将Vue这种外部依赖声明为`peerDependencies`，然后由宿主应用统筹兼顾所用到各组件的`peerDependencies`，找出能符合各自需求的一个版本并安装之，甚至是自己魔改的版本，这给了宿主应用很多的自由度，也是一种“单例模式”。但换个角度想，这是把一部分依赖管理的工作转交给了宿主应用的开发者，显得极不可靠。
 
 ## `npm`、`yarn`和`pnpm`
 
@@ -210,8 +210,8 @@ ChunkRenderError: Cannot convert undefined or null to object
 1. 我们在`@vue/cli`配置的基础上，对Webpack的`splitChunks`配置及`externals`配置做了进一步修改，一些模块会被打包到同一个chunk里面去以减少网络请求数，还有些模块被设置为`externals`由App原生缓存预拉取；
 2. 该项目有两个异步模块A和B刚好被归类到同一个`cacheGroup`内，不过模块A被标记为`externals`，所以产物chunk里面只有模块B，`contenthash`也是根据B计算的；
 3. 最近一次变更模块B新增了很多内容，超出了该`cacheGroup`的文件大小要求，现在该`cacheGroup`只有模块A，而模块A又是个`externals`依赖，于是寄了；
-4. 问题难以定位一来是因为该报错会打断Webpack构建，没有构建产物可以分析比对，而业务开发团队的行为一切正常；另外就是那个让人摸不着头脑的报错信息，以及Webpack对出错信息的处理掩盖了最初的错误堆栈，进一步增加了排查难度……
-5. 为了减少影响面，同时也考虑到他们这个场景其实有很多巧合，我给出的修复方案是在该项目内对`splitChunks.cacheGroups`配置稍作修改，覆盖模板项目的默认配置，后面模板项目迭代的时候再将相应配置调整集成进去。
+4. 问题难以定位一来是因为该报错会打断Webpack构建，没有构建产物可以分析比对，而业务开发团队的行为一切正常；另外就是那个让人摸不着头脑的报错信息，Webpack对出错信息的处理掩盖了最初的错误堆栈，进一步增加了排查难度……
+5. 为了减少影响面，同时也观察到他们这个场景想发生有很多巧合，我给出的修复方案是在该项目内对`splitChunks.cacheGroups`配置稍作修改，覆盖模板项目的默认配置，后面模板项目迭代的时候再将相应配置调整集成进去。
 
 #### Webpack5
 
@@ -255,30 +255,54 @@ Babel的代码转换功能以Plugin的形式提供，Preset则是内聚在一起
 
 `core-js`是ECMA Script最新API标准的ES5实现。Babel虽然可以将ES6以上的语法转译为ES5，但为了提高转译速度，可以不转译标准中的一些新API，比如如`Promise`、`Array.from`等，然后采用预先导入`core-js`对应实现的方式去执行Babel转译后的代码。早期的时候为了省事可以直接导入`@babel/polyfill`（内置了`core-js`和`regenerator-runtime`），Babel 7.4.0之后`@babel/polyfill`已经废弃，官方的建议是导入`core-js/stable`，不过polyfill代码比起原生实现通常更低效，即使GZip后也有100多KB，占用加载时间，既然并非所有平台都需要polyfill，通常会根据用户机型按需加载。
 
-`core-js`也是学习ECMA Script标准的好方法，虽说里面的代码继承了早期JS的各种糟粕，全局变量漫天飞……我就干过参考`core-js`在Lua中模拟`Promise`的[事儿](https://github.com/EverSeenTOTOTO/async-await-in-lua)，但我还没有掌握真正在Lua中实现并行（执行宏任务微任务）的技术，创建多个Lua虚拟机可以，但这样两个虚拟机之间只能交换一些便于序列化的内容，不好传递函数闭包，也许还是得完整模拟事件循环。
+`core-js`也是学习ECMA Script标准的好方法，虽说里面的代码继承了早期JS的各种糟粕，全局变量漫天飞……我就干过参考`core-js`在Lua中模拟`Promise`的[事儿](https://github.com/EverSeenTOTOTO/async-await-in-lua)，但我还没有掌握真正在Lua中实现并行（执行宏任务微任务）的技术，创建多个Lua虚拟机可以，但这样两个虚拟机之间只能交换一些便于序列化的内容，很难传递函数闭包。
 
 #### `@babel/preset-env`
 
-`@babel/preset-env`提供了Babel最主要的用例：提供对较新ECMA Script标准的转换支持。稍微值得一提的是配置项中的`include`和`exclude`，Babel和构建工具一起使用时，可能存在Babel处理后的代码新增了导入`core-js`模块的语句，构建工具检测到新模块再次交给Babel进行打包造成循环依赖并导致生成的代码执行出错的情况，这时可要借助`include`或`exclude`控制Babel处理的范围，其他一些已是ES5的代码也可以跳过转译以加快转译速度。
+`@babel/preset-env`提供了Babel最主要的用例：对较新ECMA Script标准的转换支持。稍微值得一提的是配置项中的`include`和`exclude`，Babel和构建工具一起使用时，可能存在Babel处理后的代码新增了导入`core-js`模块的语句，构建工具检测到新模块再次交给Babel进行打包造成循环依赖并导致生成的代码执行出错的情况，这时可要借助`include`或`exclude`控制Babel处理的范围，其他一些已是ES5的代码也可以跳过转译以加快转译速度。
 
 #### `@babel/plugin-transform-runtime`
 
 由Babel转译的代码存在一些普遍使用的工具函数，例如实现继承的`_extend`、实现Generator的`regenerator`等，如果在每个生成的每份代码中都包含一遍这些工具函数的实现，无疑是很大的浪费，`@babel/plugin-transform-runtime`就是用来解决这个问题的，其中搜集了所有转译代码会用到的工具函数，在Babel转译后用到这些方法的地方，直接导入`@babel/plugin-transform-runtime`的相应实现就可以了。构建工具或者平台的模块机制一般能够确保这些代码仅被加载一次。
 
-Babel很好用，但毕竟是JS实现的编译器前端，有个明显的不足就是速度慢，Babel加Webpack简直是开发者噩梦。因此陆续出现了使用系统编程语言编写的同质工具SWC和Esbuild。SWC比较纯粹，使用Rust编写，目的就是能无痛替换掉Babel；Esbuild使用Go编写，野心不小，目的是一个Universal Bundler。我的工作实践是，考虑到Babel久经考验以及转译为ES5或更早标准的需要，在生产构建时使用Babel，在开发阶段使用Esbuild或SWC。
+Babel很好用，但毕竟是JS实现的编译器前端，有个明显的不足就是速度慢，Babel加Webpack简直是开发者噩梦。因此陆续出现了使用系统编程语言编写的同质工具SWC和Esbuild。SWC使用Rust编写，目的比较纯粹，目的就是能无痛替换掉Babel；Esbuild使用Go编写，野心不小，目的是一个Universal Bundler。我的工作实践是，考虑到Babel久经考验以及转译为ES5或更早标准的需要，在生产构建时使用Babel，在开发阶段使用Esbuild或SWC。
 
-### Eslint、Stylelint
+### ESlint、Stylelint
 
-顺便还提一下Prettier和editorconfig，它们主要用于规范团队代码风格，例如换行、空行、缩进等，不过在Eslint有了`--fix`选项之后我就很少用到它们了。
+两者都是基于AST的Lint工具，ESLint基于estree的AST，而Stylelint基于postcss的AST，应该说能理解[AST和访问者模式](./Compiler.md#H87d55bb42b784a04)就不难理解它们的功能和如何实现各种Rules。既然是基于AST的工具，理论上所有基于AST的操作它们都能做，而仅有AST还不足以进行的一些分析优化它们都不能做。顺便提一下Prettier和editorconfig，它们主要用于规范团队代码风格，例如换行、空行、缩进等，不过在ESLint有了`--fix`和`--format`选项之后我就很少用到了。
 
 ### Browserslist
 
+前端开发将会面对海量的平台兼容性问题，这就是[Can I Use](https://caniuse.com/)和Browserslist出现的原因。前者是一个查询Web API在各平台上支持度的网站，后者则是一个浏览器版本信息的数据库。很多工程化工具都内置或者照搬了对Browserslist的支持，比如Babel、Webpack等，通过配置项目的目标平台版本，可以控制这些工具产出适应该平台的代码。
+
 ### Less、Sass、Postcss
+
+CSS自身糟糕的语法设计使得书写CSS代码是一件繁琐又低效的差事，于是出现了Less和Sass/Scss，Less和Sass定义的DSL我不是很喜欢，平时用的也很少因此谈不上多了解，主要用的是Scss，Scss的语法设计非常接近于原始的CSS，比起Less和Sass也更符合人们的直觉。不过我在CSS这块的造诣没多深，即使是现在也经常需要翻阅Scss的文档去看看要复用某部分CSS代码该怎么写。
+
+Less和Sass是所谓的CSS预处理工具，它们最终还是编译为CSS文件，而Postcss则是所谓的CSS后处理工具，在CSS基础上做变更。Postcss之于CSS正如Babel之于Javascript，它提供了一套编译处理CSS的完整工具链，可以通过插件拓展其功能，如支持最新的CSS标准、格式化CSS/Less/Scss文件、兼容多浏览器平台（[autoprefixer](https://github.com/postcss/autoprefixer)）等。
 
 ### TSC
 
+TSC在前端工程化领域里主要被用于类型检查和生成类型文件，虽然TSC本身也提供了编译TS文件的功能，不过实践中为了统一性通常都是用Webpack/Rollup等构建JS代码，TSC使用`--emitDeclarationOnly`仅输出类型定义。这种情况下有个比较麻烦的东西是路径别名，Webpack/Rollup/TSC各自的别名不能互通，需要多次配置，且TSC编译后并不处理别名，往往还要用ts-alias之类的库处理之。
+
 ### Git hooks
+
+Git hooks可以在执行Git操作的时候执行各种自动化脚本，是前端工程的重要组成部分，这里介绍我熟悉的几个工具：
+
+1. [husky](https://github.com/typicode/husky)：在Git原生钩子的基础上做了简单的封装，使之更适合前端工程；
+
+2. [lint-staged](https://github.com/okonet/lint-staged)：使用ESLint这些Lint工具的时候往往只希望对本次需求改动的内容进行检查，而不用对整个code base做检查，一者为了效率，而来也避免在Lint规则变动之后影响到以前已投产的代码。lint-staged顾名思义，可以让Lint工具只检查Git staged工作区的文件，通常与husky配合使用，在pre-commit阶段检查。
+
+3. [commitlint](https://github.com/conventional-changelog/commitlint)：与husky配合使用，用commit-msg钩子检查提交信息，让每一次提交的说明信息更规范可读，便于生成Changelog。
 
 ### Standard Version
 
+项目发布时使用，按照[Semver规范](#H70e0acd94076cc45)自动迭代版本并生成Changelog信息。
+
 ## Headless Browser
+
+不知道是不是该翻译成“无头浏览器”，听着怪惊悚的。指的是没有UI层、靠代码控制的浏览器内核，浏览器的其他功能基本都有。目前主流PC端浏览器都有无头版本，安卓也可以通过`adb`达成类似效果，iOS我不是很了解，其中比较出名的可能是Chrome的Puppeteer，我拿来做个一段时间的高级爬虫，定期爬取一些新闻和财经信息，只不过我爬了也懒得看后来就废弃了。在前端工程化领域无头浏览器主要被用于测试与性能分析：
+
+1. e2e测试，有现成的框架Cypress和Playwright，都挺好用的；
+2. 页面性能分析，例如Google的Lighthouse，我有段时间致力于在Lighthouse上做个二次封装以便集成到我们的流水线上去，宏愿是自动分析前端应用性能并将生成的报告邮件到项目开发者，不过Lighthouse当时正处于变革期，从早期只能进行单个页面冷启动的性能分析往能够[根据用户操作追踪多页面生命周期的模式](https://github.com/GoogleChrome/lighthouse/blob/main/docs/user-flows.md)迁移，文档与代码均相当混乱，我在捏着鼻子通过翻源码翻Issue做到生成报告这一步之后随着工作重心的迁移就逐渐搁置了；
+3. 协助生成应用文档，这是我的一个想法，还没有实施过。结合自己作为新人的经历和带新人的经历，我觉得如果能够将前端应用各个时期的页面都截图录下来并配以必要的文字信息，是非常良好的熟悉项目的方式。从事过项目交接就能体会到，过去的文档写得不管有多好，信息的丢失都是必然的，有时连人员都不一定能找到，想要复现过去的开发环境、测试数据乃至做出重构那真是战战兢兢如履薄冰。这时假如有无头浏览器，自动访问和操作各页面并生成对应截图乃至README.md，对后来者无疑是造福了，整个项目的变迁过程有迹可循，也更生动形象。

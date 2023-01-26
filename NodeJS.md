@@ -178,7 +178,7 @@ if (schedulingPolicy !== SCHED_RR ||
 }
 ```
 
-`handle`是服务器资源及调度算法的抽象，`SCHED_RR`为非Windows平台的默认调度策略，因此`handle`实际只存在于主进程中。`RoundRobinHandle`即处理TCP连接的默认模式，而UDP协议及Windows平台则使用`SharedHandle`，这是因为UDP协议是无连接协议，而Windows是平台API自身的问题（可以在注释中看到），采用`SharedHandle`意味着套接字也由主进程创建，但会发送给子进程，由子进程自己去做Accept连接等一众动作。这变相相当于把调度权交给了操作系统的进程调度，按照NodeJS文档的[说法](https://nodejs.org/docs/latest-v14.x/api/cluster.html#cluster_how_it_works)，性能可能还不如RR模式。
+`handle`是服务器资源及调度算法的抽象，`SCHED_RR`为非Windows平台的默认调度策略，因此`handle`实际只存在于主进程中。`RoundRobinHandle`即处理TCP连接的默认模式，而UDP协议及Windows平台则使用`SharedHandle`，这是因为UDP协议是无连接协议，而Windows是平台API自身的问题（可以在注释中看到）。采用`SharedHandle`意味着套接字也由主进程创建，但会发送给子进程，由子进程自己去做Accept连接等一众动作。这变相相当于把调度权交给了操作系统的进程调度，按照NodeJS文档的[说法](https://nodejs.org/docs/latest-v14.x/api/cluster.html#cluster_how_it_works)，性能可能还不如RR模式。
 
 worker_threads我将其看成Web Worker在NodeJS中的等价物，按照文档的说法，worker_threads适用于CPU密集型任务，对IO密集型任务的提升并不比NodeJS其他基于libuv的异步API大。翻看worker_threads的源码能看到worker_threads的和`spawn('node')`非常相似，工作线程也有自己的v8实例和事件循环，只是创建工作线程比起创建进程来说要更轻量一点。不过频繁、大量创建线程的开销也是不可接受的，实践中往往需要线程池。
 
@@ -250,7 +250,7 @@ write('hello', () => {
 
 ## 异常处理的模式
 
-NodeJS异常处理通常有三种：`try/catch`，`emitter.on('error')`和`promise.catch`。这里提一嘴异常是因为我想起了以前在别处看来的对动态语言中异常处理模式的批评，我相当赞同的一个观点：像JS这类动态语言开发的项目规模大起来之后，程序中很容易出现遗漏未处理的异常。根本原因在于动态语言不像Java、C#那样对异常处理有严格的要求，底层的异常会一层层传递上去，每层该兜住哪些会传递哪些职责明确，不像动态语言中非常依赖开发者的自觉和对异常捕获体系的良好设计。
+NodeJS异常处理通常有三种：`try/catch`，`emitter.on('error')`和`promise.catch`。这里提一嘴异常是因为我想起了以前在别处看来的对动态语言中异常处理模式的批评，我相当赞同的一个观点：像JS这类动态语言开发的项目规模大起来之后，程序中很容易遗漏未处理的异常。根本原因在于动态语言不像Java、C#那样对异常处理有严格的要求，底层的异常会一层层传递上去，每层该兜住哪些会传递哪些职责明确，而动态语言中非常依赖开发者的自觉和对异常捕获体系的良好设计。
 
 ## 调试
 

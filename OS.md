@@ -16,7 +16,7 @@
 
 #### `join`和`detach`
 
-顺便提一下C++标准库`thread`中的`join`和`detach`，`t.join()`会阻塞主线程直到`t`执行完成并退出，而`t.detach()`则把`t`丢在一边执行（成为守护进程），不会阻塞主线程。如果主线程退出时`t`还未执行完成，`t`的执行会被挂起，其局部资源将被析构，这很可能不是我们所期望的行为。因此使用`detach`经常会借助`future`、`promise`等措施来判断`t`是否已经完成执行。这个例子改编自[cppreference](https://en.cppreference.com/w/cpp/thread/thread/detach)：
+顺便提一下C++标准库`thread`中的`join`和`detach`，`t.join()`会阻塞主线程直到`t`执行完成并退出，而`t.detach()`则把`t`丢在一边执行（类似守护进程），不会阻塞主线程。如果主线程退出时`t`还未执行完成，`t`的执行会被挂起，其局部资源将被析构，这很可能不是我们所期望的行为。因此使用`detach`经常会借助`future`、`promise`等措施来判断`t`是否已经完成执行。这个例子改编自[cppreference](https://en.cppreference.com/w/cpp/thread/thread/detach)：
 
 ```cpp
 #include <iostream>
@@ -55,7 +55,7 @@ Destructing Demo
 Exiting main thread.
 ```
 
-如果将`t.join()`改成`t.detach()`，大概率只得到输出：
+如果将`t.join()`改成`t.detach()`，大概率只得到输出，在主线程退出时子线程直接被“shutdown”了：
 
 ```
 Starting main thread.
@@ -90,8 +90,8 @@ int main() {
 
 ```
 Starting main thread.
-Exiting main thread.
 Starting concurrent thread.
+Exiting main thread.
 Exiting concurrent thread.
 Destructing Demo
 ```
