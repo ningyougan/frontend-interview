@@ -33,7 +33,7 @@ console.log(d == d2); // true
     require('./d.js'); // c.js loading d.js
     ```
 
-> 在v14+的NodeJS中，可以通过`node:`前缀跳过缓存直接访问到NodeJS原生模块。魔改原生模块缓存的时候可能会用到。
+> 在v14+的NodeJS中，可以通过`node:`前缀跳过缓存直接访问到NodeJS原生模块。Mock原生模块的时候可能会用到。
 
 再如，多进程架构中，往往清理一个进程的模块缓存还不够，要同步使其他进程的缓存失效，这个问题与清除多核CPU缓存面临的问题是一样的：
 
@@ -87,7 +87,6 @@ require('./e.txt'); // 文件内容为 hello world
 
 
 ```
-❯ node a.js
 loading d.js
 hello world
 ```
@@ -96,7 +95,7 @@ hello world
 
 ## `spawn`、`fork`和`exec`
 
-`spawn`用来创建一个子进程，而`fork`和`exec`可以当作在`spawn`上的二次封装，其中`exec`会创建一个新的shell并在其中执行命令，而`fork`会创建一个新的NodeJS进程并建立一条父子进程之间的IPC信道，创建的子进程是完全独立的，有自己的事件循环、内存空间和v8实例。故`exec`可当作`spawn('sh')`而`fork`可看作是`spawn('node')`。
+`spawn`用来创建一个子进程，而`fork`和`exec`可以当作在`spawn`上的二次封装，其中`exec`会创建一个新的shell并在其中执行命令，而`fork`会创建一个新的NodeJS进程并建立一条父子进程之间的IPC信道，创建的子进程是完全独立的，有自己的事件循环、内存空间和v8实例。故`exec`可理解为`spawn('sh')`而`fork`可理解为`spawn('node')`。
 
 虽然名字是`exec`，但`exec`与POSIX系统调用`execve(2)`截然不同，`execve`会替换掉当前进程所执行的程序，包括整个程序的栈、堆和数据段：
 
@@ -166,7 +165,7 @@ if (cluster.isMaster) {
 }
 ```
 
-后面把NodeJS文档及cluster模块的源码反复看了三遍才大致理解cluster如何实现子进程之间共享TCP连接，不得不吐嘈NodeJS内部模块之间各种强耦合，真不知道他们是怎么维护得下去的：在`net`或`dgram`内部能看到`server.listen`或者`socket.bind`都针对cluster的worker环境改写过，会调用`cluster._getServer`函数从主进程获取`handle`，该方法定义在cluster模块的子进程代码内，实质是通过进程间通信向主进程发送一个动作为`queryServer`的消息，主进程内处理此消息的方法就叫做`queryServer`，它是真正负责创建`handle`的函数，核心代码如下：
+后面把NodeJS文档及cluster模块的源码反复看了N遍才大致理解cluster如何实现子进程之间共享TCP连接，不得不吐嘈NodeJS内部模块之间各种强耦合，真不知道他们是怎么维护得下去的：在`net`或`dgram`内部能看到`server.listen`或者`socket.bind`都针对cluster的worker环境改写过，会调用`cluster._getServer`函数从主进程“获取”`handle`，该方法定义在cluster模块的子进程代码内，实质是通过进程间通信向主进程发送一个动作为`queryServer`的消息，主进程内处理此消息的方法就叫做`queryServer`，它是真正负责创建`handle`的函数，核心代码如下：
 
 ```js
 if (schedulingPolicy !== SCHED_RR ||
@@ -178,11 +177,11 @@ if (schedulingPolicy !== SCHED_RR ||
 }
 ```
 
-`handle`是服务器资源及调度算法的抽象，`SCHED_RR`为非Windows平台的默认调度策略，因此`handle`实际只存在于主进程中。`RoundRobinHandle`即处理TCP连接的默认模式，而UDP协议及Windows平台则使用`SharedHandle`，这是因为UDP协议是无连接协议，而Windows是平台API自身的问题（可以在注释中看到）。采用`SharedHandle`意味着套接字也由主进程创建，但会发送给子进程，由子进程自己去做Accept连接等一众动作。这变相相当于把调度权交给了操作系统的进程调度，按照NodeJS文档的[说法](https://nodejs.org/docs/latest-v14.x/api/cluster.html#cluster_how_it_works)，性能可能还不如RR模式。
+`handle`是服务器资源及调度算法的抽象，`SCHED_RR`为非Windows平台的默认调度策略，因此`handle`实际只存在于主进程中。`RoundRobinHandle`即处理TCP连接的默认模式，而UDP协议及Windows平台则使用`SharedHandle`，这是因为UDP协议是无连接协议，而Windows是平台API自身的问题（可以在注释中看到）。`RoundRobinHandle`关键在于一个`handoff`函数，在主进程监听到`onconnection`事件后会将`handle`发送给挑选的子进程；而采用`SharedHandle`意味着套接字也由主进程创建，但是由子进程自己去获取`handle`并做Accept连接等动作。这变相相当于把调度权交给了操作系统的进程调度，按照NodeJS文档的[说法](https://nodejs.org/docs/latest-v14.x/api/cluster.html#cluster_how_it_works)，性能可能还不如RR模式。
 
 worker_threads我将其看成Web Worker在NodeJS中的等价物，按照文档的说法，worker_threads适用于CPU密集型任务，对IO密集型任务的提升并不比NodeJS其他基于libuv的异步API大。翻看worker_threads的源码能看到worker_threads的和`spawn('node')`非常相似，工作线程也有自己的v8实例和事件循环，只是创建工作线程比起创建进程来说要更轻量一点。不过频繁、大量创建线程的开销也是不可接受的，实践中往往需要线程池。
 
-+ worker_threads相关代码：
++ [worker_threads相关代码](https://github.com/nodejs/node/blob/main/src/node_worker.cc)：
 
     ```c++
     // libuv eventloop
@@ -223,18 +222,18 @@ worker_threads与child_process和cluster的区别是主线程和工作线程之�
 
 ## stream
 
-“流”这个名词出现太多次了，以至于如果问我到底什么是“流”我觉得我答不上来。我倾向于把“流”当作是一种“抽象”，当出于性能或其他考虑，不是对事物的整体进行处理，而是一次处理一点点的时候，流这个概念就应运而生了。它可以是利用有限缓冲区处理大文件的文件流、亦或是在迭代器与生成器抽象上实现的生产者、甚至是《SICP》中那种利用惰性求值实现的工厂函数。NodeJS中的流以第一类字节流居多，出于本身的高度抽象有好用的一面，但自己封装流时说实话糟糕的API设计也总让我迷惑。
+“流”这个名词出现太多次了，以至于如果问我到底什么是“流”我觉得我答不上来。我倾向于把“流”当作是一种“抽象”，当出于性能或其他考虑，不是对事物的整体进行处理，而是一次处理一点点的时候，流这个概念就应运而生了。它可以是利用有限缓冲区处理大文件的文件流、亦或是在迭代器与生成器抽象上实现的生产者、甚至是《SICP》中那种利用惰性求值实现的工厂函数。NodeJS中的流以第一类字节流居多，出于本身的高度抽象有好用的一面，但我特别想吐嘈的是stream模块糟糕的API设计，一会儿`read`一会儿`_read`一会儿`push`一会儿`unshift`的，让人眼花缭乱。
 
 steam模块提供了三种流的抽象：可读流`Readable`、可写流`Writable`以及双工流`Duplex`，还有一种转换流`Transform`建立在`Duplex`的抽象之上。
 
-`Writable`流比较值得一提的是`drain`事件，该事件在流遇到“背压”（backpressure，即内部缓冲区达到预设容量`highWaterMark`）失去流动性，之后又变得可用时触发，因此常被用于避免在背压期间写入流可能导致的内存问题（在背压期间试图写入流的数据并不会丢失，而是会被缓存起来，造成大量的内存浪费及GC问题）：
+`Writable`流比较值得一提的是`drain`事件，该事件在流遇到“背压”（backpressure，由于内部缓冲区达到预设容量`highWaterMark`）失去流动性，之后又变得可用时触发，因此常被用于避免在背压期间写入流可能导致的内存问题（在背压期间试图写入流的数据并不会丢失，而是会被缓存起来，造成大量的内存浪费及GC问题）：
 
 ```js
 function write(data, cb) {
   if (!stream.write(data)) {  // 背压
     stream.once('drain', cb); // 恢复流动性之后调用cb
   } else {
-    process.nextTick(cb);
+    process.nextTick(cb);     // 一轮IO结束
   }
 }
 
@@ -244,17 +243,23 @@ write('hello', () => {
 });
 ```
 
-`Readable`流提供了两个模式：`flow`和`paused`，其实就是观察者模式的推模型和拉模型，前者一旦数据就绪就会通过`data`事件提供出去（或者pipe到一个`Writable`），后者需要自己主动调用`read`从流中读取数据。两种模式可以视情况[相互转换](https://nodejs.org/docs/latest-v14.x/api/stream.html#stream_two_reading_modes)。
+`Readable`流提供了两个模式：`flow`和`paused`，其实就是观察者模式的推模型和拉模型，前者一旦数据就绪就会通过`data`事件提供出去（或者pipe到一个`Writable`），后者需要自己主动调用`read`从流中读取数据。两种模式可以视情况[相互转换](https://nodejs.org/docs/latest-v14.x/api/stream.html#stream_two_reading_modes)。`Readable`也有背压问题，在实现`Readable`时，若调用`push`方法返回`false`，就说明内部缓冲区已满，应该暂停给`Readable`提供数据。
 
 `Duplex`实现了`Writable`和`Readable`的全部接口，其中读写端是相互独立的，包括内部的缓冲区也是独立的，因为读写速度未必一致。而`Transform`则在`Duplex`上再封装了一层，适合用于实现流的过滤和转换等。
 
+### Reactive Stream
+
+响应式流在[RxJS](./Framework.md#H3afa1894d4d39d1e)这里有所介绍。
+
 ## 异常处理的模式
 
-NodeJS异常处理通常有三种：`try/catch`，`emitter.on('error')`和`promise.catch`。这里提一嘴异常是因为我想起了以前在别处看来的对动态语言中异常处理模式的批评，我相当赞同的一个观点：像JS这类动态语言开发的项目规模大起来之后，程序中很容易遗漏未处理的异常。根本原因在于动态语言不像Java、C#那样对异常处理有严格的要求，底层的异常会一层层传递上去，每层该兜住哪些会传递哪些职责明确，而动态语言中非常依赖开发者的自觉和对异常捕获体系的良好设计。
+NodeJS异常处理通常有三种：`try/catch`，`emitter.on('error')`和`promise.catch`。这里提一嘴异常是因为我想起了以前在别处看来的对动态语言中异常处理模式的批评，我相当赞同的一个观点：像JS这类动态语言开发的项目规模大起来之后，程序中很容易遗漏未处理的异常。根本原因在于动态语言不像Java、C#那样对异常处理有严格的要求，底层的异常会一层层传递上去，每层该兜住哪些会传递哪些职责明确，而动态语言中非常依赖开发者的自觉和对异常捕获体系的良好设计，这么一看国内一些团队力主`error.cause`进入ECMA Script标准还是很有必要的。
+
+## async_hooks
 
 ## 调试
 
-我主要通过`node --inspect`和`node --inspect-brk`在Chrome Debugger中调试NodeJS程序，好像没什么特别想说的。
+我主要通过`node --inspect`或`node --inspect-brk`在Chrome Debugger中调试NodeJS程序，好像没什么特别想说的。
 
 ## 内存快照
 

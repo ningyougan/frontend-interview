@@ -27,7 +27,7 @@
     进而实现移除指定属性`readonly`的`remove_readonly`，为了方便使用了内置的`Omit`函数，后面介绍Conditional Types的时候会介绍`Omit`的实现：
 
     ```ts
-    // 移除指定K的readonly
+    // 移除T上指定K的readonly
     export type remove_readonly<T, K extends keyof T> = { -readonly [P in K]: T[P] } extends infer PartA
       ? Omit<T, K> extends infer PartB
         ? (PartA & PartB) extends infer R
@@ -59,7 +59,7 @@
     2. 再检查`extends`左边的类型`checkType`，对应`T1`和`T2`，任意一个是否与另一个关联`isRelatedTo`；
     3. 最后检查对应分支类型是否相互关联，即`X1`是否与`X2`、`Y1`是否与`Y2`关联。
 
-    `isTypeIdenticalTo`涉及了对内部类型标记的判断，这是此解法将`{a:1}&{b:2}`和`{a:1,b:2}`视为不相等的关键，也是得以区分`readonly`的关键。但TSC在处理条件类型时会先将其实例化（对条件类型求分支具体值）再作类型检查，因此需要设法让TSC惰性求值，也是下面`<P>() => P`的作用，构造一个Deferred Conditional Type，让TSC比对两个条件类型的数据结构而非推导出的具体分支值。
+    `isTypeIdenticalTo`涉及对内部类型标记的判断，这是此解法将`{a:1}&{b:2}`和`{a:1,b:2}`视为不相等的关键，也是我们得以区分`readonly`的关键。但TSC在处理条件类型时会先将其实例化（对条件类型求分支具体值）再作类型检查，因此需要设法让TSC惰性求值，也是下面`<P>() => P`的作用，构造一个Deferred Conditional Type，让TSC比对两个条件类型的数据结构而非推导出的具体分支值。
 
     总之，我们得到如下解法，首先构造两个条件类型`CondType1`和`CondType2`，使待判断目标`T`和`U`处在`extends`右边对应位置，然后再用一个条件类型对`CondType1`和`CondType2`进行相等性判断，以利用底层的比对机制：
 
@@ -299,8 +299,8 @@ type foo = { foo: 42 };
 type bar = { bar: 'hello ts' };
 
 type union = foo | bar;
-type tuple = [foo, bar];
 type intersect = foo & bar;
+type tuple = [foo, bar];
 ```
 
 我从编程语言相关的资料中陆续看到过一些关于协变和逆变的介绍，但始终没有得到一个完善的系统的描述。因此我决定不想得那么复杂，协变和逆变到底是什么？它们是“原有父子关系的一对集合（类型、范畴……），进行某变换之后是否能够保持该关系的**变换的性质**”的描述。
@@ -419,7 +419,7 @@ type x = union_to_tuple<1 | 2 | 3>; // [1, 2, 3]
 
 最后是Intersection转Tuple完成闭环。特别一提，`string`、`number`等Primitive类型相交集之后得到的是`never`，是没办法还原出原来的类型的，所以我们主要谈论的是对象类型的交集。
 
-实现的难点和分解Union类似，在没有额外信息的情况下，该如何提取出Intersection每个项呢？本来从交集得到原始集合听起来就匪夷所思，交集类型也不像联合类型那样有分派特性，因此还是依赖TSC的实现细节。还记得前面的`is_identical`吗？它会将`{a:1}&{b:2}`和`{a:1,b:2}`判断为不相等，这就是我们实现的关键。方法其实很笨，先把Intersection转为等价的对象类型，求出所有属性的子集并转为相应对象类型，将这些对象类型相互组合（等价于将对象类型构成的大集合再求一次子集），然后看各个集合内部元素相交是否与原有的交集类型相等，相等则该集合就是解。集合的子集数量是有限的，所以算法一定会终止，只是很低效，因为子集个数是2的幂次，两次求子集意味着回溯树非常庞大，大到tsserver提示`Type instantiation is excessively deep and possibly infinite.`以及我的IDE一度卡爆。
+实现的难点和分解Union类似，在没有额外信息的情况下，该如何提取出Intersection每个项呢？本来从交集得到原始集合听起来就匪夷所思，交集类型也不像联合类型那样有分派特性，因此还是依赖TSC的实现细节。还记得前面的`is_identical`吗？它会将`{a:1}&{b:2}`和`{a:1,b:2}`判断为不相等，这就是我们实现的关键。方法其实很笨，先把Intersection转为等价的对象类型，求出所有属性的子集，做为组合成对象类型的“原子”，将这些对象类型相互组合（等价于将对象类型构成的大集合再求一次子集），然后看各个集合内部元素相交是否与原有的交集类型相等，相等则该集合就是解。集合的子集数量是有限的，所以算法一定会终止，只是很低效，因为子集个数是2的幂次，两次求子集意味着回溯树非常庞大，大到tsserver提示`Type instantiation is excessively deep and possibly infinite.`以及我的IDE一度卡爆。
 
 ```ts
 // 关键技巧
