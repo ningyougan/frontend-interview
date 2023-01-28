@@ -257,6 +257,89 @@ NodeJS异常处理通常有三种：`try/catch`，`emitter.on('error')`和`promi
 
 ## async_hooks
 
+上面刚提到NodeJS异常处理的时候容易遗漏，对于处在异步作用域里面的异常，尽管可以用`unhandledRejection`和`uncaughtException`兜底，但捕获到的异常会丢失整个调用栈，这使得定位错误链路非常麻烦，比如下面这个例子：
+
+```js
+const ah = require('async_hooks');
+
+process.on('unhandledRejection', reason => console.error(reason));
+
+function foo() {
+  console.log(`foo ${ah.executionAsyncId()}, caller ${ah.triggerAsyncId()}`);
+  Promise.reject(new Error('foo'));
+}
+
+(function main() {
+  console.log(`main ${ah.executionAsyncId()}, caller ${ah.triggerAsyncId()}`);
+  setTimeout(foo);
+})()
+```
+
+```
+main 1, caller 0
+foo 5, caller 1
+Error: foo
+    at Timeout.foo [as _onTimeout] (demo.js:7:18)
+    at listOnTimeout (node:internal/timers:564:17)
+    at process.processTimers (node:internal/timers:507:7)
+```
+
+由于`foo`在`setTimeout`创建的异步上下文中执行，尽管最终打印出了报错点`demo.js:7:18`，却丢失了相应的`main() -> foo()`调用栈，非常鸡肋。于是NodeJS提供了`async_hooks`可以追踪异步资源生命周期与异步上下文信息。所谓异步资源是NodeJS对那些运行时资源的抽象，通常都有一个相关联的回调，例如各种Timer、`net.createServer(cb)`、`fs.open(cb)`、`stream.write(cb)`等，这些方法会都创建和操作一些底层资源，操作完成后执行回调`cb`。这些回调执行时所处的环境与注册回调时所处的环境通常是不同的，这里的环境即所谓的“上下文”，像这样非阻塞地安排各种任务，由底层事件循环调度执行并在完成后回调的异步执行流在NodeJS中相当古老。像上面的例子，我们使用`executionAsyncId`获取当前执行上下文的id，用`triggerAsyncId`获取创建此上下文的上层环境的id，很容易推测出`0`是顶层执行上下文，`0`创建了上下文`1`并异步调用`main`，`main`同步调用`setTimeout`，`setTimeout`创建上下文`5`并异步调用`foo`，如此一来整条链路就清晰了。
+
+### Continuation Local Storage
+
+借助`async_hooks`，我们可以创建类似“线程局部存储”的东西，只不过把这里的“线程”换成了“执行上下文”。通常用追踪Express服务器链路耗时举例，当然也有很多异步场景存在类似需求：
+
+```js
+const ah = require('async_hooks');
+const express = require('express');
+
+const app = express();
+const sym = Symbol();
+
+ah.createHook({
+  init(asyncId, type, triggerAsyncId, resource) {
+    const cr = ah.executionAsyncResource();
+
+    if (cr) {
+      resource[sym] = cr[sym]; // 在同一链路的上下文之间用相同的键sym传递信息
+    }
+  },
+}).enable();
+
+let i = 0;
+app.use((req, res, next) => {
+  ah.executionAsyncResource()[sym] = { start: performance.now() }; // 记录链路开始时间
+
+  setTimeout(next, ++i % 2 === 0 ? 0 : 300); // 模拟业务耗时
+});
+
+app.use((req, res, next) => {
+  next();
+
+  const state = ah.executionAsyncResource()[sym]; // 获取该链路开始时间
+
+  console.log(`elapsed: ${performance.now() - state.start}ms`);
+
+  res.end();
+});
+
+app.listen(8080);
+```
+
+随便找个压测工具访问5次，观察打印的链路用时：
+
+```js
+❯ node demo.js
+elapsed: 303.07601998746395ms
+elapsed: 1.1405540108680725ms
+elapsed: 301.2219209969044ms
+elapsed: 1.1689050048589706ms
+elapsed: 301.8494890034199ms
+```
+
+使用`executionAsyncResource`的优点是不用我们自己去区分每个请求的链路，假设我们使用一个`Map`记录请求开始的时机，那么每个请求都得生成唯一的一个键，以便区分每个请求触发的链路。换句话说使用`Map`是在一个存储中存放不同的Id以区分请求，而使用`executionAsyncResource`则每个请求的中间件执行链路相互独立，我们为每条链路创建一个存储，这些存储中统一使用键`sym`记录请求开始时机，应该说是有点反直觉的。
+
 ## 调试
 
 我主要通过`node --inspect`或`node --inspect-brk`在Chrome Debugger中调试NodeJS程序，好像没什么特别想说的。
