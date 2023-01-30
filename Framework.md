@@ -225,7 +225,7 @@ export function emitButton(node: ts.VNodeButton, ctx: Context): RenderInst[] {
 ],
 ```
 
-在`canvas`上绘制，渲染效果看着还是挺能唬住人的：
+在`canvas`上绘制，渲染效果看着还是挺唬人的：
 
 ```html
 <script>
@@ -235,9 +235,7 @@ export function emitButton(node: ts.VNodeButton, ctx: Context): RenderInst[] {
   canvas.width = 800;
   canvas.height = 400;
 
-  const container = document.createElement('div');
-  container.append(canvas);
-  document.body.append(container);
+  document.body.append(canvas);
 
   const ctx = canvas.getContext('2d');
   const insts = emitInsts(vdom);
@@ -261,7 +259,7 @@ S = [1,2,3,4];
 T = [1,3,3,2,4];
 ```
 
-从S得到T有很多种方式，我们设计一套一步动作只更改一个位置的指令，那么对S和T做Diff Patch就是一个典型的“最小编辑距离”问题，比对之后得到的指令序列可能如下：
+从S得到T有很多种方式，我们设计一套单步只更改一个位置的指令，那么对S和T做Diff Patch就是一个典型的“最小编辑距离”问题，比对之后得到的指令序列可能如下：
 
 ```ts
 [
@@ -271,7 +269,7 @@ T = [1,3,3,2,4];
 ]
 ```
 
-回到Web框架，从前面的求值器实现中我们知道一个VDOM结点是可以和它所创建的真实DOM结点关联起来的，那就可以用一些Diff算法来比对新旧两棵VDOM树，对于有变化的结点，找到对应真实DOM结点将变更动作应用到上面去就是了。这个比对并生成动作的过程即所谓的`diff`过程，应用变更的过程即所谓的`commit`过程。还是举例说明：
+回到Web框架，从前面的求值器实现中我们知道一个VDOM结点是可以和它所创建的真实DOM结点关联起来的，那就可以用一些Diff算法来比对新旧两棵VDOM树，对于有变化的结点，生成一系列变更动作（指令），然后找到对应的DOM结点将变更动作应用到上面去就是了。这个比对并生成动作的过程即所谓的`diff`过程，应用变更的过程即所谓的`commit`过程。还是举例说明：
 
 ```ts
 const S = div(
@@ -378,7 +376,7 @@ function doChangeStyle(action: ActionChangeStyle) {
 1. 假设旧VDOM结点为S，关联的真实DOM结点为R，新VDOM结点为T，比对它们的`tag`名称；
 2. 如果S和T的`tag`不同：
     1. 删除R；
-    2. 编译T，将得到的DOM结点其插入到R原先所在位置；
+    2. 编译T，将得到的DOM结点插入到R原先所在位置；
 3. 如果S和T的`tag`相同：
     1. 若S和T的`tag`名称为`text`，比对两者的文本内容，若有变化，修改R的文本内容为T的；
     2. 比对S和T的`children`，即找出哪些结点需要新增，哪些结点需要删除，哪些结点`tag`没变只是索引变化：
@@ -393,7 +391,7 @@ function doChangeStyle(action: ActionChangeStyle) {
 ```ts
 export function diffPatch(source: VNode, target: VNode) {
   if (source.tag !== target.tag) {
-    // diffPatchReplace 里面会编译 target
+    // diffPatchReplace 里面会编译 target，然后生成一个插入动作
     return diffPatchReplace(source, target);
   }
 
@@ -413,7 +411,7 @@ export function diffPatch(source: VNode, target: VNode) {
 }
 ```
 
-对属性的Diff大多数时候是比较两个对象的键值对；对`children`的Diff是一个典型的“最小编辑序列”问题，我们限制编辑动作一次只能做一件事，这样所有动作的代价为1，通过比较序列的长度获取代价最小的编辑序列，动态规划解决。根据算法描述，设计了三种编辑动作：
+对属性的Diff大多数时候是比较两个对象的键值对；对`children`的Diff是一个动态规划问题，我们限制编辑动作一次只能做一件事，这样所有动作的代价为1，通过比较序列的长度获取代价最小的编辑序列。根据算法描述，设计了三种编辑动作：
 
 1. `keep`：结点同时存在于S和T中，保留但递归下降比对子结点和属性；
 2. `insert`：T中新增的结点；
@@ -430,7 +428,7 @@ export function diffPatchChildren(source: VNodeWrap, target: VNodeWrap) {
         actions.push(...diffPatch(e.source!, e.target!));
         break;
       case 'insert':
-        evalVNode(e.target!);
+        evalVNode(e.target!); // 新结点需要编译
         actions.push({
           type: 'insert',
           index: e.index,
@@ -472,7 +470,7 @@ export function render(vdom: web.VNode, container: HTMLElement) {
 }
 ```
 
-修改一下前面的用例，用一个函数`component`包装生成VDOM树的过程，通过提供不同的外部状态`state`，我们可以复用这段逻辑，生成结构相近的VDOM树。组件的概念已经悄无声息地出现了：
+修改一下前面的用例，用一个函数`component`包装生成VDOM树的过程，通过提供不同的外部状态`state`，我们可以复用这段逻辑，生成结构相近的VDOM树。组件的概念就这样悄无声息地出现了：
 
 ```html
 <script>
@@ -514,19 +512,17 @@ export function render(vdom: web.VNode, container: HTMLElement) {
     onClick: () => console.log("clicked")
   }
 
-  setTimeout(() => render(component(state), document.body), 2000);
+  setTimeout(() => render(component(state), document.body), 4000);
 </script>
 ```
 
-渲染效果如下，可以观察到2s后仅`div`发生了变更，`button`不受影响：
+渲染效果如下，可以观察到4s后仅`div`发生了变更，`button`结点不受影响，但成功绑定了`onClick`句柄：
 
-<video controls width="1200">
-    <source src="./VDOM-render.mp4" type="video/mp4">
+<img src="./target-web.gif" width="1200" />
 
-    Download the
-    <a href="./VDOM-render.mp4">MP4</a>
-    video.
-</video>
+再来看将VDOM编译为渲染指令的例子，道理不变，只是VDOM结点的产物变成了一组渲染指令，因此Diff Patch生成的动作要操作这些指令序列。简单起见，无论是增删还是改，我们都针对新的VDOM重新生成一组指令序列并替换掉原有的那组。每次渲染时，清空Canvas并将所有渲染指令从头到尾重新执行一遍。更复杂的做法是将图像分层，每次只重绘有变更的层，然后用合成器合成出最终的图像，这也是各种渲染引擎底层会做的事，对我们这个小实验来说就太复杂了。换个角度想，我们的所做所为也可以看成是重复造“浏览器渲染引擎”的轮子。
+
+<img src="./target-canvas.gif" width="1200" />
 
 Diff Patch同时也是实现SSR“水化”的关键，这是废话，不表。
 
