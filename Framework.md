@@ -4,7 +4,7 @@
 
 本文主要介绍React和Vue，前者做为FP思想的范例，后者作为OOP思想的范例，把握住这两点，很多问题就迎刃而解了。后来出现的Svelte、Solid等，个人觉得只是在VDOM应用与否、模板预编译优化程度上的取舍，在Web这个特定场景可能有进一步的性能提升，但总体来说并没有特别让人眼前一亮的地方。而且我非常讨厌Svelte又双叒创造了一套模板语法的行为。
 
-比较特殊的是Angular，将Spring那套控制反转和依赖注入的思想引入了前端应用的设计中，能够理解IOC和DI，并且知道[怎么用`reflect-metadata`实现装饰器](https://www.everseenflash.com/CS/Snippets/Macro.md#H047e72df69d52b2e)的话Angular也没什么神秘的。甚至有巨硬官方的[轮子](https://github.com/microsoft/tsyringe)可以复用。我的观点和社区里一些观点一致，Angular更适合专业性比较高的大型团队使用，想用好有一定的门槛和心智负担，普通开发者和小型团队使用可能还适得其反。
+比较特殊的是Angular，将Spring那套控制反转（IOC）和依赖注入（DI）的思想引入了前端应用的设计中，能够理解IOC和DI，并且知道[怎么用`reflect-metadata`实现装饰器](https://www.everseenflash.com/CS/Snippets/Macro.md#H047e72df69d52b2e)的话Angular也没什么神秘的。甚至有巨硬官方的[轮子](https://github.com/microsoft/tsyringe)可以复用。我的观点和社区里一些观点一致，Angular更适合专业性比较高的大型团队使用，想用好有一定的门槛，普通开发者和小型团队使用可能适得其反。
 
 ### Virtual DOM
 
@@ -14,7 +14,7 @@
 
 <img src="./VDOM.png" width="600px" />
 
-假如前后端分离，服务器承担编译器前端的工作，负责生成VDOM，客户端承担编译期后端的工作，负责渲染VDOM，这是不是就是React正在探索的Server Components背后的思想？进一步畅想：如果随着技术的发展AR/VR已经大行其道，成为前端展示层的主流，难道我们就会抛弃现有的前端框架了吗？很可能不会，React/Vue说到底只是一套设计和管理前端应用的方法，也许那时只要在现有的VDOM基础上缝缝补补就可以输出为AR/VR的渲染指令。受此启发，像AST这种中间表示，现有的前端框架基本都是某种求值器，求值过程为创建对应的HTML元素，但AST还可以编译为IR进一步编译为在CPU上执行的二进制指令，类比一下完全有可能将VDOM编译为GPU渲染指令，并且将各种编译优化手段应用到这个过程中去。这也是我当前正在探索的东西。
+假如前后端分离，服务器承担编译器前端的工作，负责生成VDOM，客户端承担编译器后端的工作，负责渲染VDOM，这是不是就是React正在探索的Server Components背后的思想？进一步畅想：如果随着技术的发展AR/VR已经大行其道，成为前端展示层的主流，难道我们就会抛弃现有的前端框架了吗？很可能不会，React/Vue说到底只是一套设计和管理前端应用的方法，也许那时只要在现有的VDOM基础上缝缝补补就可以输出为AR/VR的渲染指令。受此启发，像AST这种中间表示，现有的前端框架基本都是某种求值器，求值过程为创建对应的HTML元素，但AST还可以编译为IR进一步编译为在CPU上执行的二进制指令，类比一下完全有可能将VDOM编译为GPU渲染指令，并且将各种编译优化手段应用到这个过程中去。这也是我当前正在探索的东西。
 
 作为示例，我们设计一套极简的VDOM，只有几个结点类型：
 
@@ -101,7 +101,7 @@ export function evalButton(node: ts.VNodeButton): HTMLButtonElement {
   ]);
 </script>
 <script>
-  const {evalVNode} = window.Demo.web;
+  const {evalVNode} = window.Demo;
 
   document.body.append(...evalVNode(vdom));
 </script>
@@ -113,7 +113,7 @@ export function evalButton(node: ts.VNodeButton): HTMLButtonElement {
 
 #### 编译器
 
-如前文所述，既然求值可行，那我们把同一套VDOM翻译成渲染指令（类比汇编代码）保存下来当然也是可行的。为此让我们先设计几个简单的虚拟渲染指令：
+如前文所述，既然求值可行，那我们把同一套VDOM翻译成渲染指令（类比汇编代码）保存下来应该也是可行的。为此我们先设计几个简单的虚拟渲染指令：
 
 1. `moveTo x, y`: 移动指针到坐标`(x, y)`处；
 2. `fillStyle style`: 改变填充色；
@@ -229,13 +229,13 @@ export function emitButton(node: ts.VNodeButton, ctx: Context): RenderInst[] {
 
 ```html
 <script>
-  const {emitInsts, execInst} = window.Demo.canvas;
+  const {emitInsts, execInst} = window.Demo;
   const canvas = document.createElement('canvas');
 
   canvas.width = 800;
   canvas.height = 400;
 
-  document.body.append(canvas);
+  container.append(canvas);
 
   const ctx = canvas.getContext('2d');
   const insts = emitInsts(vdom);
@@ -246,11 +246,11 @@ export function emitButton(node: ts.VNodeButton, ctx: Context): RenderInst[] {
 
 <img src="./VDOM-canvas.png" />
 
-假如`vdom`保持不变的话，下次可以直接执行编译出来的渲染指令`insts`，省去了整个编译器前端部分的工作，这也是AOT的优势所在。更进一步还可以联想到JIT，一部分VDOM实时编译为“Hot”指令，一部分编译为“Cold”指令并缓存，大半个编程语言和编译原理领域的轮子都站在我们面前，能应用到什么程度全看个人能力了。
+假如`vdom`保持不变的话，下次可以直接执行编译出来的渲染指令`insts`，省去了整个编译过程，这也是AOT的优势所在。更进一步还可以联想到JIT，一部分VDOM实时编译为“Hot”指令，一部分编译为“Cold”指令并缓存，大半个编程语言和编译原理领域的轮子都站在我们面前，能发挥到什么程度全看个人能力了。
 
 #### Diff Patch
 
-Diff Patch的概念相当普遍，当我们需要同步某类数据结构S为T时，一种做法是直接将S整个换成T，比如双缓冲模式，可能交换下两个缓冲区指针就行了。但很多时候这么简单粗暴的替换会导致所有在S上已经做的工作丢失了，产生重复劳动。比如`npm install`生成`node_modules`的过程，如果无视本地已有的`node_modules`结构S，仅根据最新的依赖树结构T重新安装一遍，无疑会有很多不必要的下载、复制动作。对于Web框架，此处的“数据结构”即VDOM树，如果每次一点小更新都需要对整个VDOM树重新求值、创建DOM结点并替换原有的DOM结点，尽管表现出来的样式差异可能不大，但却破坏了浏览器渲染引擎底层已经创建好的真实DOM树，渲染引擎需要重新计算布局、样式等信息，造成大范围的reflow，所有相关的JS代码也需要重新执行一遍，比如重新绑定事件回调，这个代价几乎是不可接受的。
+Diff Patch的概念相当普遍，当我们需要同步某类数据结构S为T时，一种做法是直接将S整个换成T，比如双缓冲模式，可能交换下两个缓冲区指针就行了。但很多时候这么简单粗暴的替换会导致所有在S上已经做的工作丢失了，产生重复劳动。比如`npm install`生成`node_modules`的过程，如果无视本地已有的`node_modules`结构S，仅根据最新的依赖树结构T重新安装一遍，无疑会有很多不必要的下载、复制动作。对于Web框架，此处的“数据结构”即VDOM树，如果每次一点小更新都需要对整个VDOM树重新求值、创建DOM结点并替换原有的DOM结点，尽管表现出来的样式差异可能不大，却破坏了浏览器渲染引擎底层已经创建好的真实DOM树，渲染引擎需要重新计算布局、样式等信息，造成大范围的reflow，所有相关的JS代码也需要重新执行一遍，比如重新绑定事件回调，这个代价几乎是不可接受的。
 
 怎么办呢？既然整个替换不行，那就比对S和T的差异（Diff），仅对差异的地方做調整（Patch），把影响最小化呗。某种意义上这也是一种编译器，输入是数据结构S和T，输出是一系列动作（指令），指示我们该如何一步步操作S，将S变为T。举例来说，假如S和T是两个数组：
 
@@ -269,7 +269,7 @@ T = [1,3,3,2,4];
 ]
 ```
 
-回到Web框架，从前面的求值器实现中我们知道一个VDOM结点是可以和它所创建的真实DOM结点关联起来的，那就可以用一些Diff算法来比对新旧两棵VDOM树，对于有变化的结点，生成一系列变更动作（指令），然后找到对应的DOM结点将变更动作应用到上面去就是了。这个比对并生成动作的过程即所谓的`diff`过程，应用变更的过程即所谓的`commit`过程。还是举例说明：
+回到Web框架，从前面的求值器实现中我们知道一个VDOM结点是可以和它所创建的真实DOM结点关联起来的，那就可以用一些Diff算法来比对新旧两棵VDOM树，对于有变化的VDOM结点，生成一系列变更动作（指令），然后找到关联的真实DOM结点将变更动作应用到上面去就是了。这个比对并生成动作的过程即所谓的`diff`过程，应用变更的过程即所谓的`commit`过程。还是举例说明：
 
 ```ts
 const S = div(
@@ -384,25 +384,28 @@ function doChangeStyle(action: ActionChangeStyle) {
         2. 对每个待删除的子结点，从R中删除相关联的DOM结点；
         3. 对每个待新增的子结点，编译并将得到的DOM结点插入到R中；
     3. 比对S和T的`attr`，若有变化，修改R的属性为T的；
-    4. 将R和T关联，以后将T作为新的S使用。
+    4. 将R和T关联；
+4. 以后将T作为新的S使用。
 
-具体实现中用`actions`保存了所有生成的动作，没有现场执行，在React Fiber那里还会提到这样做的好处：
+具体实现中用`actions`保存了所有生成的动作，没有现场执行：
 
 ```ts
 export function diffPatch(source: VNode, target: VNode) {
   if (source.tag !== target.tag) {
-    // diffPatchReplace 里面会编译 target，然后生成一个插入动作
     return diffPatchReplace(source, target);
-  }
-
-  if (source.tag === 'text') {
-    return diffPatchText(source, target);
   }
 
   const actions: PatchAction[] = [];
 
-  actions.push(...diffPatchChildren(source, target));
-  actions.push(...diffPatchAttributes(source, target));
+  if (source.tag === 'text') {
+    actions.push(...diffPatchText(source, target));
+  } else {
+    actions.push(...diffPatchChildren(source, target as VNodeWithChildren));
+
+    if (source.tag !== 'fragment') {
+      actions.push(...diffPatchAttributes(source, target as VNodeWithAttr));
+    }
+  }
 
   // 复用source关联的DOM
   target.output = source.output;
@@ -451,7 +454,7 @@ export function diffPatchChildren(source: VNodeWrap, target: VNodeWrap) {
 }
 ```
 
-现在可以实现我们自己的`render`函数了，用`old`保存旧的VDOM树，如果没有，说明是首次渲染，将`vdom`赋值给`old`并将渲染结果挂载到`container`上；如果已有`old`，则根据最新的`vdom`进行Diff Patch，逐个执行生成的动作：
+现在可以实现我们自己的`render`函数了，用`old`保存旧的VDOM树，如果是`undefined`，说明是首次渲染，需要将渲染结果挂载到`container`上；如果已有`old`，则根据最新的`vdom`进行Diff Patch，逐个执行生成的动作。最后总是将`old`设置为最新的`vdom`：
 
 ```ts
 let old: web.VNode | undefined;
@@ -470,7 +473,7 @@ export function render(vdom: web.VNode, container: HTMLElement) {
 }
 ```
 
-修改一下前面的用例，用一个函数`component`包装生成VDOM树的过程，通过提供不同的外部状态`state`，我们可以复用这段逻辑，生成结构相近的VDOM树。组件的概念就这样悄无声息地出现了：
+修改一下前面的用例，用一个函数`component`包装生成VDOM树的过程，通过提供不同的外部状态`state`，我们可以复用这段逻辑，生成结构相近的VDOM树。**组件的概念就这样悄无声息地出现了**：
 
 ```html
 <script>
@@ -520,35 +523,244 @@ export function render(vdom: web.VNode, container: HTMLElement) {
 
 <img src="./target-web.gif" width="1200" />
 
-再来看将VDOM编译为渲染指令的例子，道理不变，只是VDOM结点的产物变成了一组渲染指令，因此Diff Patch生成的动作要操作这些指令序列。简单起见，无论是增删还是改，我们都针对新的VDOM重新生成一组指令序列并替换掉原有的那组。每次渲染时，清空Canvas并将所有渲染指令从头到尾重新执行一遍。更复杂的做法是将图像分层，每次只重绘有变更的层，然后用合成器合成出最终的图像，这也是各种渲染引擎底层会做的事，对我们这个小实验来说就太复杂了。换个角度想，我们的所做所为也可以看成是重复造“浏览器渲染引擎”的轮子。
+顺便看看将VDOM编译为渲染指令的例子，道理不变，只是VDOM结点的产物变成了一组渲染指令，因此Diff Patch生成的动作要操作这些指令序列。简单起见，无论是增删还是改，我们都针对新的VDOM重新生成一组指令序列并替换掉原有的那组。每次渲染时，清空Canvas并将所有渲染指令从头到尾重新执行一遍。更复杂的做法是将图像分层，每次只重绘有变更的层，然后用合成器合成出最终的图像，这也是各种渲染引擎底层会做的事，对我们这个小实验来说就太复杂了。换个角度想，我们的所做所为也可以看成是重复造“浏览器渲染引擎”的轮子。
 
 <img src="./target-canvas.gif" width="1200" />
 
 Diff Patch同时也是实现SSR“水化”的关键，这是废话，不表。
 
-### React
+#### 组件
 
-#### React Fiber
+什么是组件，上面点了一下，组件的出现是为了逻辑复用，逻辑复用最基础的方式就是抽象成函数，所以组件本质就是一个生成VDOM的函数。那为什么又有所谓的class组件和functional组件之分呢？这还得从FP和OOP思想的差异说起，我假设读者已经对FP的常见概念，如“纯函数”、“副作用”有所了解，因为感觉我接下来的表达有点混乱。
 
-#### React hooks
+函数有其内部状态，函数执行时函数体内定义的变量分配在其栈上，每次执行完成都会随着函数栈帧的销毁回收。所以理论上只要参数不变函数的每次执行都应该得到相同的效果，但实际上对非纯函数式的语言，由于闭包捕获、获取时间戳、写入标准输出流等外部状态的变化，即使参数没变，函数在不同的时机执行也可能得到不同的效果。有时这会造成难以察觉的BUG，因此我们应该尽可能编写“纯”的、前后行为一致的函数，这样的函数对其使用者来说，只代表一段逻辑，是个黑盒。那逻辑要操作的数据放在哪里呢？一种方法是用函数表达数据结构，这是可行的，但比较晦涩，我在[JS原型继承](./Javascript.md#H3b3a160a963d49a3)这一节的末尾处写了一个例子。更符合人们直觉的是用`struct`之类的东西表达一个数据结构，因此理想的状态是：用对象表达一组数据，前端常称之为状态`state`，用一组纯函数表达操作这个对象的逻辑，比如`render`，只要提供的状态相同，函数的行为（输出的VDOM）始终相同：
 
-#### React18的启示
+```ts
+const state = {
+  width: 300,
+  color: 'blue',
+};
 
-### Vue
+const render = (state) => { /* ... */ };
+```
 
-#### 观察者模式与对象代理
+class组件只不过做得内聚一点，将一个状态和它相关的一组逻辑放在了一起，这更加符合人们对事物的直觉了，也是OOP理念获得成功的关键。但另一方面，假如class的内部状态不加以管理，外界可以绕过class提供的逻辑（类方法），直接操作其内部状态，这很可能破坏类设计者书写逻辑时的假设，也是React不断强调要用`setState`改变状态的原因：
 
-#### 依赖倒置原则与双向绑定
+```ts
+const o = {
+  state: {
+    width: 300
+  },
+  render() {
+    const newWidth = this.width + 100;
 
-#### Vue3 hooks
+    // ...
+  }
+};
 
-### 状态管理与DDD
+o.state.width = "No, please no!";
+
+o.render(); // !!! Oooops
+```
+函数可以嵌套组合所以组件可以嵌套组合，就像前面用例中那样，`fragment`、`div`、`button`算是一些内置组件，我们还需要给用户提供自定义组件的能力，并且框架要对这些组件一视同仁。很自然地想到，`VNode`的抽象能够覆盖这一场景，我们新设计一种`VNode`子类型来代表组件，正如[React文档](https://reactjs.org/blog/2015/12/18/react-components-elements-and-instances.html#component-elements)中的这句话：**An element describing a component is also an element, just like an element describing the DOM node. They can be nested and mixed with each other.**
+
+```ts
+export interface VNodeComponent<T> extends VNodeBase<T, 'component'> {
+  vdom?: VNode<T>,
+  component: (state?: unknown) => VNode<T>,
+  state?: unknown
+}
+```
+
+这里蕴含着“惰性求值”的思想，我们保存下了组件函数和执行所需的状态，而不是原地执行组件并保存得到的VDOM。在React Fiber这一节还会进一步介绍：
+
+```ts
+const Home = () => <Counter />; // 实际被编译为React.createElement(Counter)，框架内部可以自由控制Counter的执行时机
+const Home = () => Counter();   // Home执行连带着执行Counter，无法中断
+```
+
+接着补充对`VNodeComponent`的求值和Diff Patch，在`compileComponent`中我们终于看到React那句著名宣言UI=F(State)的影子了。`compileComponent`剥离出来是因为这是框架的另一个重要优化点：假如`component`是纯函数，在`state`不变的情况下，无需重新编译VDOM，更无需做后续的Diff Patch一系列操作了：
+
+```ts
+export function compileComponent(node: VNodeComponent) {
+  const vdom = node.component(node.state); // TODO: optimize
+
+  node.vdom = vdom;
+}
+
+export function evalComponent(node: VNodeComponent) {
+  compileComponent(node);
+
+  const vdom = node.vdom!;
+
+  evalVNode(vdom);
+  node.output = vdom.output;
+
+  return vdom.output!;
+}
+
+export function diffPatchComponent(source: VNodeComponent, target: VNodeComponent) {
+  if (!source.vdom) throw new Error('source not initialized');
+
+  compileComponent(target);
+
+  return diffPatch(source.vdom, target.vdom!);
+}
+```
+
+来看看用例，留意`onClick`函数的注释：
+
+```html
+<script>
+  const {div, button, h, render} = window.Vue;
+
+  const Counter = (state) => div([`Clicked ${state.count}`], {
+    style: {
+      width: 300,
+      height: 50,
+      color: state.color,
+      bgColor: '#e4e4e4'
+    },
+  });
+
+  const state = {count: 0};
+
+  const App = () => div([ // h('div',
+    h(Counter, state),
+    button( // h('button',
+      ['Click Me'],
+      {
+        onClick: () => {
+          state.count += 1;
+          render(h(App), document.body); // 手动触发重绘
+        },
+      },
+    ),
+  ]);
+
+  render(h(App), document.body);
+</script>
+```
+
+<img src="./render-component.gif" />
+
+### 状态管理
+
+上面这个例子很重要很重要，因为它引出了响应性话题：我们需要手动绑定状态改变后的重绘逻辑，这正是jQuery被淘汰的关键。这个例子中只要在按钮按下后更新状态还好，假如还有`<input>`标签呢？我们不仅要在状态改变时更改输入框里面的值，还要在用户输入后将变化同步到状态，即所谓的“**双向绑定**”。一个两个元素都需要手动绑定一组状态更新逻辑，应用复杂之后根本顶不住，稍有疏忽就会产生BUG。因此React和Vue最大的贡献是实现了响应性，我们只需要关注状态变更，由框架完成重绘和反向同步到状态的操作。
+
+#### React Hooks
+
+##### useState
+
+到目前为止，我们所谓的重绘是将组件函数重新执行了一遍，这建立在组件函数都是纯函数的假设之上，同时框架内部有VDOM缓存和状态缓存，通过比对新旧状态判断是否要重新执行组件生成VDOM，通过比对VDOM判断是否需要更新真实DOM结点，这是典型的React模式。上面用例不能自动触发重绘的根源在于：`onClick`里面修改`state`的动作**对框架来说是不可感知的**。还记得我们前面提到的class的坏处吗？`state`是一个数据结构，`render`是操作这个数据结构的一段逻辑（类方法），那么`onClick`中`state.count += 1`就是绕过了类设计者的心理预期，“偷偷摸摸”修改状态的行为，下面是便于理解的伪码：
+
+```ts
+class AnonymousClass {
+  state = { count: 0 };
+
+  render = () => div([
+    h(Counter, this.state),
+    button(
+      ['Click Me'],
+      {
+        onClick: () => {
+          this.state.count += 1; // No, please no!
+        },
+      },
+    ),
+  ]);
+}
+```
+
+要克服这个困难，且不能由用户每次去手动绑定重绘逻辑（不然就倒退成了jQuery），那就抽象出一个方法，用户只能使用这个方法修改状态，否则不保证响应性，方法里面封装了触发重绘的逻辑。显然不可能每个类都编写这样的方法，于是提炼到基类中，最好由框架提供。这就是我们熟知的`setState`，伪码如下：
+
+```ts
+class React.Component {
+  setState(state) {
+    if (!deepEquals(state, this.state)) {
+      this.state = state;
+      triggerRerender();
+    }
+  }
+}
+
+class AnonymousClass extends React.Component {
+  state = { count: 0 };
+
+  render = () => div([
+    h(Counter, this.state),
+    button(
+      ['Click Me'],
+      {
+        onClick: () => {
+          this.setState({ count: this.state.count + 1 });
+        },
+      },
+    ),
+  ]);
+}
+```
+
+我接触React的时间其实要晚于Vue，那时已经是React Hooks元年了。因此我几乎没有在实践中书写过class组件。要怎么在函数式组件中达成同样效果呢？答案已经呼之欲出了，状态放在哪儿根本无所谓，重点是提供一个包装过的方法，这个方法看起来是修改状态的，实际上里面还封装了触发重绘的逻辑，这不就是`useState`吗！
+
+于是我们可以做一件有趣的事情，绕过React官方的`useState`，自己造一个，这是我在真实的React项目中编写的例子：
+
+```ts
+import { createRoot } from 'react-dom/client';
+
+let memo: unknown;
+function useState<T>(init: T): [T, (value: T) => void] {
+  const setState = (state: T) => {
+    if (memo !== state) {
+      memo = state;
+      root.render(<App />); // triggerRerender
+    }
+  };
+
+  if (!memo) setState(init); // initialize
+
+  return [memo as T, setState];
+}
+
+const App = () => {
+  const [state, setState] = useState(0);
+
+  return <>
+    <div>{state}</div>
+    <button onClick={() => setState(state + 1)}>Increment</button>
+  </>;
+};
+const container = document.getElementById('root');
+const root = createRoot(container!);
+
+root.render(<App />);
+```
+
+##### useEffect
+
+#### Vue3 Hooks
+
+#### Context和`provide/inject`
+
+React Context和Vue的`provide/inject`机制是跨组件层级通信的一条“高速公路”，我支持站在应用整体的高度去维护状态，却不提倡跨组件通信，因为我比较“教条”，坚持分层架构中每一层只能与相邻的层直接通信，不能跨层级交互，想想网络栈。跨层级的交互看起来方便，迭代一段时间就成“shit mountain”了，各个组件之间像耳机线一样纠缠在一起，你找不到一个状态是哪里提供的，哪里使用的，又是哪里修改的，宝贵的时间都用来梳理状态链路了。
+
+另一种跨层级通信的方式是事件总线，从解耦的角度来说有优势，但也存在事件源不明确、冲突检测、优先级调度等总线机制自己的问题。
+
+#### DDD的启发
+
+### React Fiber
+
+Fiber Reconciliation架构。
+
+### React18的启示
 
 #### RxJS
 
 ## 单元测试
 
 ## 跨端解决方案
+
+有兴趣一定要看Electron核心开发者的[文章](https://www.electronjs.org/blog/electron-internals-node-integration)及在[这个知乎话题](https://www.zhihu.com/question/36292298)下的回复。
 
 ## 服务端框架
 
