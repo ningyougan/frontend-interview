@@ -74,7 +74,7 @@ export function evalButton(node: ts.VNodeButton): HTMLButtonElement {
 ```
 
 
-这样我们的框架后端（指编译器后端，在这里是求值器）就初步可用了，下面是一个简单的用例：
+这样我们的框架后端（指编译器后端，在这里是VDOM求值器）就初步可用了，下面是一个简单的用例：
 
 ```html
 <script>
@@ -167,7 +167,7 @@ export function emitButton(node: ts.VNodeButton, ctx: Context): RenderInst[] {
     },
     {
       name: 'strokeStyle',
-      style: '#000',
+      style: '#000', // TODO: borderColor
     },
     { // 绘制按钮边框
       name: 'strokeRect',
@@ -378,7 +378,7 @@ function doChangeStyle(action: ActionChangeStyle) {
     1. 删除R；
     2. 编译T，将得到的DOM结点插入到R原先所在位置；
 3. 如果S和T的`tag`相同：
-    1. 若S和T的`tag`名称为`text`，比对两者的文本内容，若有变化，修改R的文本内容为T的；
+    1. 若S和T的`tag`名称为`text`，比对两者的文本内容，若有变化，修改R的文本内容为T的，跳转至步骤 iv；
     2. 比对S和T的`children`，即找出哪些结点需要新增，哪些结点需要删除，哪些结点`tag`没变只是索引变化：
         1. 对每个没变的子结点，假设在S和T中分别以N1和N2存在，对N1和N2重复调用此算法；
         2. 对每个待删除的子结点，从R中删除相关联的DOM结点；
@@ -477,7 +477,7 @@ export function render(vdom: web.VNode, container: HTMLElement) {
 
 ```html
 <script>
-  const {fragment, div, button} = window.Vue;
+  const {fragment, div, button} = window.Demo;
 
   const component = (state) => fragment([
     div(
@@ -531,9 +531,9 @@ Diff Patch同时也是实现SSR“水化”的关键，这是废话，不表。
 
 #### 组件
 
-什么是组件，上面点了一下，组件的出现是为了逻辑复用，逻辑复用最基础的方式就是抽象成函数，所以组件本质就是一个生成VDOM的函数。那为什么又有所谓的class组件和functional组件之分呢？这还得从FP和OOP思想的差异说起，我假设读者已经对FP的常见概念，如“纯函数”、“副作用”有所了解，因为感觉我接下来的表达有点混乱。
+什么是组件，上面点了一下，组件的出现是为了逻辑复用，逻辑复用最基础的方式就是抽象成函数，所以组件本质就是一个生成VDOM的函数。那为什么又有所谓的class组件和functional组件之分呢？这还得从FP和OOP思想的差异说起，我假设读者已经对FP的常见概念，如“纯函数”、“副作用”有所了解，因为感觉我接下来的表达还不够清晰。
 
-函数有其内部状态，函数执行时函数体内定义的变量分配在其栈上，每次执行完成都会随着函数栈帧的销毁回收。所以理论上只要参数不变函数的每次执行都应该得到相同的效果，但实际上对非纯函数式的语言，由于闭包捕获、获取时间戳、写入标准输出流等外部状态的变化，即使参数没变，函数在不同的时机执行也可能得到不同的效果。有时这会造成难以察觉的BUG，因此我们应该尽可能编写“纯”的、前后行为一致的函数，这样的函数对其使用者来说，只代表一段逻辑，是个黑盒。那逻辑要操作的数据放在哪里呢？一种方法是用函数表达数据结构，这是可行的，但比较晦涩，我在[JS原型继承](./Javascript.md#H3b3a160a963d49a3)这一节的末尾处写了一个例子。更符合人们直觉的是用`struct`之类的东西表达一个数据结构，因此理想的状态是：用对象表达一组数据，前端常称之为状态`state`，用一组纯函数表达操作这个对象的逻辑，比如`render`，只要提供的状态相同，函数的行为（输出的VDOM）始终相同：
+函数有其内部状态，每次执行时函数体内定义的变量分配在其栈上，每次执行完成都会随着函数栈帧的销毁回收。所以理论上只要参数不变函数的每次执行都应该得到相同的效果，但实际上对非纯函数式的语言，由于闭包捕获、获取时间戳、写入标准输出流等外部状态的变化，即使参数没变，函数在不同的时机执行也可能得到不同的效果。有时这会造成难以察觉的BUG，因此我们应该尽可能编写“纯”的、前后行为一致的函数，这样的函数对其使用者来说，只代表一段逻辑，是个黑盒。那逻辑要操作的数据放在哪里呢？一种方法是用函数表达数据结构，这是可行的，但比较晦涩，我在[JS原型继承](./Javascript.md#H3b3a160a963d49a3)这一节的末尾处写了一个例子。更符合人们直觉的是用`struct`之类的东西表达一个数据结构，因此理想的状态是：用对象表达一组数据，前端常称之为状态`state`，用一组纯函数表达操作这个对象的逻辑，比如`render`，只要提供的状态相同，函数的行为（输出的VDOM）始终相同：
 
 ```ts
 const state = {
@@ -572,29 +572,22 @@ export interface VNodeComponent<T> extends VNodeBase<T, 'component'> {
 }
 ```
 
-这里蕴含着“惰性求值”的思想，我们保存下了组件函数和执行所需的状态，而不是原地执行组件并保存得到的VDOM。在React Fiber这一节还会进一步介绍：
+这里蕴含着“惰性求值”的思想，我们保存下了组件函数和执行所需的状态，而不是原地执行组件并保存得到的VDOM。在React Fiber这一节还会进一步阐释：
 
 ```ts
 const Home = () => <Counter />; // 实际被编译为React.createElement(Counter)，框架内部可以自由控制Counter的执行时机
 const Home = () => Counter();   // Home执行连带着执行Counter，无法中断
 ```
 
-接着补充对`VNodeComponent`的求值和Diff Patch，在`compileComponent`中我们终于看到React那句著名宣言UI=F(State)的影子了。`compileComponent`剥离出来是因为这是框架的另一个重要优化点：假如`component`是纯函数，在`state`不变的情况下，无需重新编译VDOM，更无需做后续的Diff Patch一系列操作了：
+接着补充对`VNodeComponent`的求值和Diff Patch，在`evalComponent`中我们终于看到React那句著名宣言UI=F(State)的影子了：
 
 ```ts
-export function compileComponent(node: VNodeComponent) {
-  const vdom = node.component(node.state); // TODO: optimize
-
-  node.vdom = vdom;
-}
-
 export function evalComponent(node: VNodeComponent) {
-  compileComponent(node);
-
-  const vdom = node.vdom!;
+  const vdom = node.component(node.state);
 
   evalVNode(vdom);
   node.output = vdom.output;
+  node.vdom = vdom;
 
   return vdom.output!;
 }
@@ -602,9 +595,7 @@ export function evalComponent(node: VNodeComponent) {
 export function diffPatchComponent(source: VNodeComponent, target: VNodeComponent) {
   if (!source.vdom) throw new Error('source not initialized');
 
-  compileComponent(target);
-
-  return diffPatch(source.vdom, target.vdom!);
+  return diffPatch(source.vdom, target.component(target.state));
 }
 ```
 
@@ -612,7 +603,7 @@ export function diffPatchComponent(source: VNodeComponent, target: VNodeComponen
 
 ```html
 <script>
-  const {div, button, h, render} = window.Vue;
+  const {div, button, h, render} = window.Demo;
 
   const Counter = (state) => div([`Clicked ${state.count}`], {
     style: {
@@ -625,9 +616,9 @@ export function diffPatchComponent(source: VNodeComponent, target: VNodeComponen
 
   const state = {count: 0};
 
-  const App = () => div([ // h('div',
+  const App = () => div([
     h(Counter, state),
-    button( // h('button',
+    button(
       ['Click Me'],
       {
         onClick: () => {
@@ -646,13 +637,13 @@ export function diffPatchComponent(source: VNodeComponent, target: VNodeComponen
 
 ### 状态管理
 
-上面这个例子很重要很重要，因为它引出了响应性话题：我们需要手动绑定状态改变后的重绘逻辑，这正是jQuery被淘汰的关键。这个例子中只要在按钮按下后更新状态还好，假如还有`<input>`标签呢？我们不仅要在状态改变时更改输入框里面的值，还要在用户输入后将变化同步到状态，即所谓的“**双向绑定**”。一个两个元素都需要手动绑定一组状态更新逻辑，应用复杂之后根本顶不住，稍有疏忽就会产生BUG。因此React和Vue最大的贡献是实现了响应性，我们只需要关注状态变更，由框架完成重绘和反向同步到状态的操作。
+上面这个例子很重要很重要，因为它引出了响应性话题：我们需要手动绑定状态改变后的重绘逻辑，这正是jQuery被淘汰的关键。这个例子中只要在按钮按下后更新状态还好，假如还有`<input>`标签呢？我们不仅要在状态改变时更改输入框里面的值，还要在用户输入后将变化同步到状态，即所谓的“**双向绑定**”。一个两个元素都需要手动绑定一组状态更新逻辑，应用复杂之后根本顶不住，稍有疏忽就会产生BUG。因此React和Vue最大的贡献是实现了响应性，我们只需要关注状态变更，由框架完成重绘或同步UI状态给应用状态的操作。
 
-#### React Hooks
+#### React
 
 ##### useState
 
-到目前为止，我们所谓的重绘是将组件函数重新执行了一遍，这建立在组件函数都是纯函数的假设之上，同时框架内部有VDOM缓存和状态缓存，通过比对新旧状态判断是否要重新执行组件生成VDOM，通过比对VDOM判断是否需要更新真实DOM结点，这是典型的React模式。上面用例不能自动触发重绘的根源在于：`onClick`里面修改`state`的动作**对框架来说是不可感知的**。还记得我们前面提到的class的坏处吗？`state`是一个数据结构，`render`是操作这个数据结构的一段逻辑（类方法），那么`onClick`中`state.count += 1`就是绕过了类设计者的心理预期，“偷偷摸摸”修改状态的行为，下面是便于理解的伪码：
+到目前为止，我们所谓的重绘是将组件函数重新执行了一遍，这建立在组件函数都是纯函数的假设之上，同时框架内部有VDOM缓存和状态缓存，通过比对新旧状态触发Diff Patch，通过比对VDOM判断是否需要更新真实DOM结点，这是典型的React模式。上面用例不能自动触发重绘的根源在于：`onClick`里面修改`state`的动作**对框架来说是不可感知的**。还记得我们前面提到的class的坏处吗？`state`是一个数据结构，`render`是操作这个数据结构的一段逻辑，那么`onClick`中`state.count += 1`就是绕过了类设计者的心理预期，“偷偷摸摸”修改状态的行为，下面是便于理解的伪码：
 
 ```ts
 class AnonymousClass {
@@ -672,12 +663,12 @@ class AnonymousClass {
 }
 ```
 
-要克服这个困难，且不能由用户每次去手动绑定重绘逻辑（不然就倒退成了jQuery），那就抽象出一个方法，用户只能使用这个方法修改状态，否则不保证响应性，方法里面封装了触发重绘的逻辑。显然不可能每个类都编写这样的方法，于是提炼到基类中，最好由框架提供。这就是我们熟知的`setState`，伪码如下：
+要克服这个困难，且不能由用户每次手动去绑定重绘逻辑（不然就倒退成了jQuery），那就抽象出一个方法，用户只能使用这个方法修改状态，否则不保证响应性，方法里面封装了触发重绘的逻辑。显然不可能每个类都编写这样的方法，于是提炼到基类中，最好由框架提供。这就是我们熟知的`setState`，伪码如下：
 
 ```ts
 class React.Component {
   setState(state) {
-    if (!deepEquals(state, this.state)) {
+    if (!shallowEquals(state, this.state)) {
       this.state = state;
       triggerRerender();
     }
@@ -701,9 +692,11 @@ class AnonymousClass extends React.Component {
 }
 ```
 
-我接触React的时间其实要晚于Vue，那时已经是React Hooks元年了。因此我几乎没有在实践中书写过class组件。要怎么在函数式组件中达成同样效果呢？答案已经呼之欲出了，状态放在哪儿根本无所谓，重点是提供一个包装过的方法，这个方法看起来是修改状态的，实际上里面还封装了触发重绘的逻辑，这不就是`useState`吗！
+在真正的React中更新状态的行为是异步的，假如连续执行了两次`setState`，由于内部任务调度，第一个`setState`很可能还没有作用到`this.state`上，于是第二次`setState`执行时`this.state`是错误的。应使用`this.setState((s) => ({ count: s.count + 1 }))`，依然是“惰性求值”的思想，React在`setState`时只是记下这个函数，推迟直到有最新的状态才执行之。不得不说这又是一个心智负担，光这一点足以让人淘汰class组件了。
 
-于是我们可以做一件有趣的事情，绕过React官方的`useState`，自己造一个，这是我在真实的React项目中编写的例子：
+我接触React的时间其实要晚于Vue，那时已经是React Hooks元年了。所以我几乎没怎么书写过class组件。那么在函数式组件中，要怎么达成同样效果呢？答案已经呼之欲出了，状态在外面放哪儿根本无所谓，重点是提供一个包装过的方法，这个方法看起来只是修改状态的，其实里面还封装了触发重绘的逻辑，这不就是`useState`吗！
+
+于是我们可以做一件有趣的事情，绕过React官方的`useState`，自己造一个，这是在真实的React项目中编写的例子：
 
 ```ts
 import { createRoot } from 'react-dom/client';
@@ -713,7 +706,7 @@ function useState<T>(init: T): [T, (value: T) => void] {
   const setState = (state: T) => {
     if (memo !== state) {
       memo = state;
-      root.render(<App />); // triggerRerender
+      root.render(<App />); // trigger rerender
     }
   };
 
@@ -738,7 +731,129 @@ root.render(<App />);
 
 ##### useEffect
 
-#### Vue3 Hooks
+JS并非纯函数式语言，我们在实际应用中也不可避免地和外部状态打交道，函数中操作外部状态的行为称之为“副作用（Effect）”。React模式每次渲染会将组件函数重新执行一遍，这就不可避免地带来一个问题：有时我们希望组件的副作用只在特定情况下执行，比如使用Timer，我们很可能希望`setTimeout`只在组件初始化的时候执行一次，以后除非`timeout`变化了，否则都不该执行：
+
+```ts
+const Foo = () => {
+  const [timeout] = useState(1000);
+
+  setTimeout(bar, timeout); // ???
+
+  return <></>;
+}
+```
+
+像上面这样不能达成目标，每次`Foo`执行都会挂载一个Timer，解决方案依然是在函数外设置缓存，记下Timer ID和上次的`timeout`值，`Foo`里面通过与缓存的比对判断是否需要执行`setTimeout`：
+
+```ts
+let lastTimeoutId;
+let lastTimeoutValue = 1000;
+
+const Foo = () => {
+  const [timeoutValue] = useState(lastTimeoutValue);
+
+  if (!lastTimeoutId || lastTimeoutValue !== timeoutValue) {
+    clearTimeout(lastTimeoutId);
+    lastTimeoutId = setTimeout(() => console.log('trigger'), timeoutValue);
+  }
+
+  return <></>;
+}
+```
+
+显而易见，这又是一个应该由框架提供的能力，我们将副作用用一个函数包装，并告知框架在哪些状态变化时执行之。理解这一点之后，在刚刚绕过`React.useState`的基础上，我们也可以“淘汰”`React.useEffect`自己实现一个低配版：
+
+```diff
+let memo: unknown;
++ const changedStates: unknown[] = [];
+
+export function useState<T>(init: T): [T, (value: T) => void] {
+  const setState = (state: T) => {
+    if (memo !== state) {
+      memo = state;
++      changedStates.push(memo); // collect changed states
+      root.render(<App />);     // trigger rerender
++      setTimeout(() => changedStates.splice(0, changedStates.length)); // clear after each turn, not safe
+    }
+  };
+
+  if (!memo) setState(init);
+
+  return [memo as T, setState];
+}
+```
+
+```ts
+let initOrClear: (() => void) | boolean = false;
+
+export function useEffect<T>(effect: () => void | (() => void), deps: Array<T>): void {
+  if (!initOrClear || deps.find((dep) => changedStates.includes(dep))) { // if any deps has changed
+    if (typeof initOrClear === 'function') initOrClear();
+
+    initOrClear = effect() ?? true;
+  }
+}
+
+const App = () => {
+  const [timeoutValue, setTimeoutValue] = useState(1000);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => console.log('timeout'), timeoutValue);
+
+    return () => clearTimeout(timeoutId);
+  }, [timeoutValue]);
+
+  return <>
+    <button onClick={() => setTimeoutValue(timeoutValue + 1)}>Increment</button>
+  </>;
+};
+
+```
+
+`useState`和`useEffect`是其他Hooks的基石，还有些React18新出现的Hooks我还不是很熟悉就不介绍了。现在我们要做的，就是汇总以上知识，在自己的微型React框架中实现真正可复用的Hooks，而不是上面的一次性“青春版”。
+
+实现的难点其实是怎么封装“青春版”Hooks用到的那些全局变量，比如`memo`和`initOrClear`，因为我们不知道用户会调用多少次`useState`，不可能预先准备足够的全局变量。那用数据结构吧，直观的想法是哈希表，但是用什么作为键呢？我最初的想法是直接用状态作为键，值代表状态是否`dirty`，很快意识到思路不对，例如`useState([])`，别忘了组件函数每次都会重新执行，所以每次都会创建一个新的`[]`，和上次的`[]`不是一个东西。而且我一开始并没有想到将状态存在组件VNode上，而是想偷懒，用一个全局状态存储，每一项代表一个`useState`创建的状态，那么每一项都需要和其所在的组件关联起来，这里尝试了各种方法都不太行，最后翻了一下Preact的源码才恍然大悟：将状态存在组件上，设置两个全局变量`currentComponent`和`currentHookId`，每次组件函数执行之前将`currentComponent`设置为该组件，将`currentHookId`置`0`，这样组件函数内部调用`useState`时就能通过`currentComponent`拿到当前组件，通过`currentHookId`拿到`useState`所创建状态的编号并作为哈希表的键，这就很好地解释了1. React要求Hooks只能在组件函数内部执行，否则拿不到`currentComponent`；2. React要求Hooks不能放置在分支语句下面，因为走不同分支可能导致`currentHookId`错位。
+
+具体实现上可以聪明一点，在创建`VNodeComponent`的时候对`component`做个封装，免得后面用到的地方还要重复处理：
+
+```diff
++ export type UseStateHookState = { type: 'useState', state: unknown, dirty: boolean };
++ export type UseEffectHookState = { type: 'useEffect', clearEffect?: () => void };
+
+export interface VNodeComponent<T> extends VNodeBase<T, 'component'> {
+  vdom?: VNode<T>,
+  component: (state?: unknown) => VNode<T>,
+  state?: unknown,
++  hookState: Map<number, UseStateHookState | UseEffectHookState>,
+}
+
++ let currentComponent: VNodeComponent;
++ export const getCurrentComponent = () => currentComponent;
+ 
++ let hookId = 0;
++ export const getCurrentHookId = () => hookId++;
+
+export const h = (component: (state: unknown) => VNode, state?: unknown) => {
+  const vnode: VNodeComponent = {
+    tag: 'component',
+-    component,
++    component: (s?: unknown) => {
++      currentComponent = vnode;
++      hookId = 0;
++      return component(s);
++    },
++    hookState: new Map(),
+    state,
+  };
+  return vnode;
+};
+```
+
+完整的Hooks实现代码见[这里](https://github.com/EverSeenTOTOTO/mini-framework/blob/main/src/react/index.ts)。
+
+#### Vue
+
+#### DDD的启发
 
 #### Context和`provide/inject`
 
@@ -746,17 +861,15 @@ React Context和Vue的`provide/inject`机制是跨组件层级通信的一条“
 
 另一种跨层级通信的方式是事件总线，从解耦的角度来说有优势，但也存在事件源不明确、冲突检测、优先级调度等总线机制自己的问题。
 
-#### DDD的启发
-
-### React Fiber
+#### React Fiber
 
 Fiber Reconciliation架构。
 
-### React18的启示
-
-#### RxJS
+#### React18的启示
 
 ## 单元测试
+
+Jest加Testing-Utils基本满足了我的日常需求，E2E测试考虑Playwright。
 
 ## 跨端解决方案
 
