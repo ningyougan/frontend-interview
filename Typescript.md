@@ -551,3 +551,4 @@ type t = i2t_helper<intersect, c>; // type t = [foo, bar]
 
 ## 类型系统
 
+等我看完了《TOPL》再来更新。

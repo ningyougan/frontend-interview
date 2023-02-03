@@ -2,26 +2,26 @@
 
 ## Web应用框架
 
-本文主要介绍React和Vue，前者做为FP思想的范例，后者作为OOP思想的范例，把握住这两点，很多问题就迎刃而解了。后来出现的Svelte、Solid等，个人觉得只是在VDOM应用与否、模板预编译优化程度上的取舍，在Web这个特定场景可能有进一步的性能提升，但总体来说并没有特别让人眼前一亮的地方。而且我非常讨厌Svelte又双叒创造了一套模板语法的行为。
+本文主要介绍React和Vue，前者做为FP思想的范例，后者作为OOP思想的范例，把握住这两点，很多问题就迎刃而解。后来出现的Svelte、Solid等，个人觉得只是在VDOM应用与否、模板预编译优化程度上的取舍，在Web这个特定场景可能有进一步的性能提升，但总体来说并没有特别让人眼前一亮的地方。而且我非常讨厌Svelte又双叒创造了一套模板语法的行为。
 
 比较特殊的是Angular，将Spring那套控制反转（IOC）和依赖注入（DI）的思想引入了前端应用的设计中，能够理解IOC和DI，并且知道[怎么用`reflect-metadata`实现装饰器](https://www.everseenflash.com/CS/Snippets/Macro.md#H047e72df69d52b2e)的话Angular也没什么神秘的。甚至有巨硬官方的[轮子](https://github.com/microsoft/tsyringe)可以复用。我的观点和社区里一些观点一致，Angular更适合专业性比较高的大型团队使用，想用好有一定的门槛，普通开发者和小型团队使用可能适得其反。
 
 ### Virtual DOM
 
-写这篇文档的时候我思考了一下到底该如何表达出自己对React和Vue的理解，因为关于这两个框架的面试问题非常之多，有些浮于表面，只是一个毫无价值的实现细节或者接口特征，真正深入肌理的少之又少。为了避免在这些肤浅的面试问题上浪费太多生命，我决定做一件很早就想做却迟迟没有开始的事情：实现一个微型的React和Vue。让我们从Virtual DOM开始。
+写这篇文档的时候我思考了一下到底该如何表达出自己对React和Vue的理解，因为关于这两个框架的面试问题非常之多，有些浮于表面，只是一个毫无价值的实现细节或者接口特征，真正深入肌理的少之又少。为了避免在这些肤浅的面试问题上浪费太多生命，我决定做一件很早就想做却迟迟没有开始的事情：实现一个[微型的React和Vue](https://github.com/EverSeenTOTOTO/mini-framework)，在这个过程中逐步解构前端框架。让我们从Virtual DOM开始。
 
-计算机行业貌似有一个段子，各种软件造来造去，最后发现其实都是在造编译器或者操作系统。这个段子对前端框架也适用，把JSX、Vue或其他什么框架的模板语法看成是输入，HTML看成是输出，那么各种前端框架不就是一个编译器吗？而VDOM，显而易见的，和AST/IR等处在同一个位置，是一种中间表示。中间表示最核心的优点是什么？提供一个抽象层，可以在其基础上做分析优化，可以实现为不同目标平台上的机器码。那么VDOM也类似的，通过对VDOM树的分析操作可以避免每次重新执行整个组件树，可以避免在内存中维护庞大的真实DOM结点，通过不同的后端（这里指编译器后端）实现，可以输出到不同的渲染平台，如下图：
+计算机行业貌似有一个段子，各种软件造来造去，最后发现其实都是在造编译器或者操作系统。这个段子对前端框架也适用，把JSX、Vue或其他什么框架的模板语法看成是输入，HTML看成是输出，那么各种前端框架不就是一个编译器吗？而VDOM，显而易见的，和AST/IR等处在同一个位置，是一种中间表示。中间表示最核心的优点是什么？提供一个抽象层，可以在其基础上做分析优化，可以实现为不同目标平台上的机器码。那么VDOM也类似的，通过对VDOM树的分析操作可以避免每次重新构造整个组件树，通过不同的后端（这里指编译器后端）实现，可以输出到不同的渲染平台，如下图：
 
 <img src="./VDOM.png" width="600px" />
 
-假如前后端分离，服务器承担编译器前端的工作，负责生成VDOM，客户端承担编译器后端的工作，负责渲染VDOM，这是不是就是React正在探索的Server Components背后的思想？进一步畅想：如果随着技术的发展AR/VR已经大行其道，成为前端展示层的主流，难道我们就会抛弃现有的前端框架了吗？很可能不会，React/Vue说到底只是一套设计和管理前端应用的方法，也许那时只要在现有的VDOM基础上缝缝补补就可以输出为AR/VR的渲染指令。受此启发，像AST这种中间表示，现有的前端框架基本都是某种求值器，求值过程为创建对应的HTML元素，但AST还可以编译为IR进一步编译为在CPU上执行的二进制指令，类比一下完全有可能将VDOM编译为GPU渲染指令，并且将各种编译优化手段应用到这个过程中去。这也是我当前正在探索的东西。
+假如随着技术的发展AR/VR或者其他什么技术已经大行其道，成为前端展示层的主流，难道我们就会抛弃现有的前端框架了吗？很可能不会，React/Vue说到底只是一套设计和管理前端应用的方法，也许那时只要在现有的VDOM基础上缝缝补补就可以输出为AR/VR的渲染指令。受此启发，像AST这种中间表示，现有的前端框架基本都是某种求值器，求值过程为创建对应的HTML元素，但AST还可以编译为IR进一步编译为在CPU上执行的二进制指令，类比一下完全有可能将VDOM编译为GPU渲染指令，并且将各种编译优化手段应用到这个过程中去。这也是我当前正在探索的东西。
 
 作为示例，我们设计一套极简的VDOM，只有几个结点类型：
 
 1. `fragment`，类似React中的`<></>`，用于组织元素；
 2. `div`，作用和HTML的块级元素类似；
 3. `text`，代表纯文本；
-4. `button`，用于演示用户操作。支持的HTML属性也非常有限，只有`style`和`onclick`。
+4. `button`，用于演示用户操作。支持的HTML属性也非常有限，只有少数`style`属性和`onclick`事件。
 
 #### 求值器
 
@@ -246,11 +246,11 @@ export function emitButton(node: ts.VNodeButton, ctx: Context): RenderInst[] {
 
 <img src="./VDOM-canvas.png" />
 
-假如`vdom`保持不变的话，下次可以直接执行编译出来的渲染指令`insts`，省去了整个编译过程，这也是AOT的优势所在。更进一步还可以联想到JIT，一部分VDOM实时编译为“Hot”指令，一部分编译为“Cold”指令并缓存，大半个编程语言和编译原理领域的轮子都站在我们面前，能发挥到什么程度全看个人能力了。
+假如`vdom`保持不变的话，下次可以直接执行编译出来的渲染指令`insts`，省去了整个编译过程，这也是AOT的优势所在。更进一步还可以联想到JIT，一部分VDOM实时编译为“Hot”指令，一部分编译为“Cold”指令并缓存，各种编程语言和编译原理领域的轮子都站在我们面前，能发挥到什么程度全看个人能力了。
 
-#### Diff Patch
+### Diff Patch
 
-Diff Patch的概念相当普遍，当我们需要同步某类数据结构S为T时，一种做法是直接将S整个换成T，比如双缓冲模式，可能交换下两个缓冲区指针就行了。但很多时候这么简单粗暴的替换会导致所有在S上已经做的工作丢失了，产生重复劳动。比如`npm install`生成`node_modules`的过程，如果无视本地已有的`node_modules`结构S，仅根据最新的依赖树结构T重新安装一遍，无疑会有很多不必要的下载、复制动作。对于Web框架，此处的“数据结构”即VDOM树，如果每次一点小更新都需要对整个VDOM树重新求值、创建DOM结点并替换原有的DOM结点，尽管表现出来的样式差异可能不大，却破坏了浏览器渲染引擎底层已经创建好的真实DOM树，渲染引擎需要重新计算布局、样式等信息，造成大范围的reflow，所有相关的JS代码也需要重新执行一遍，比如重新绑定事件回调，这个代价几乎是不可接受的。
+Diff Patch的概念相当普遍，当我们需要同步某类数据结构S为T时，一种做法是直接将S整个换成T，比如双缓冲模式，可能交换下两个缓冲区指针就行了。但很多时候这么简单粗暴的替换会导致所有在S上已经做的工作丢失了，产生重复劳动。比方说`npm install`生成`node_modules`的过程，如果无视本地已有的`node_modules`结构S，仅根据最新的依赖树结构T重新安装一遍，无疑会有很多不必要的下载、复制动作。对于Web框架，此处的“数据结构”即VDOM树，如果每次一点小更新都需要对整个VDOM树重新求值、创建DOM结点并替换原有的DOM结点，尽管表现出来的样式差异可能不大，却破坏了浏览器渲染引擎底层已经创建好的真实DOM树，渲染引擎需要重新计算布局、样式等信息，造成大范围的reflow，所有相关的JS代码也需要重新执行一遍，比如重新绑定事件回调，这个代价几乎是不可接受的。
 
 怎么办呢？既然整个替换不行，那就比对S和T的差异（Diff），仅对差异的地方做調整（Patch），把影响最小化呗。某种意义上这也是一种编译器，输入是数据结构S和T，输出是一系列动作（指令），指示我们该如何一步步操作S，将S变为T。举例来说，假如S和T是两个数组：
 
@@ -306,7 +306,7 @@ const T = div(
 ]
 ```
 
-React、Vue或者Preact的源码为什么难以读懂，很大程度上就是因为这些指令并没有显式、工整地出现在代码中，而是以各种标志位、属性值的方式存在。毫不客气地说，是缺少了对变更动作的抽象、用相当结构化的代码实现的。我们这个实验中的VDOM很简单，可以吸取它们的教训优化设计。
+React、Vue或者Preact的源码为什么难以读懂，很大程度上就是因为这些动作并没有显式、工整地出现在代码中，而是以各种标志位、属性值的方式存在。毫不客气地说，是缺少了对变更动作的抽象、用相当结构化的代码实现的。我们这个实验中的VDOM很简单，可以吸取它们的教训优化设计。
 
 首先重写下`VNode`类型，添加一个字段`output`，用于关联该结点编译后的目标产物，例如求值创建的一个真实DOM结点，或者编译出的一组渲染指令等：
 
@@ -344,7 +344,7 @@ export function evalButton(node: VNodeButton) {
 }
 ```
 
-对产物的变更动作我们简单抽象为“增、删、改”三种，以求值器实现为例，“增”在指定位置插入结点，“删”删除当前结点，“改”修改属性，包括文本内容、样式、事件句柄等，以修改样式为例说明动作的定义和具体实现，完整代码见[这里](https://github.com/EverSeenTOTOTO/mini-framework/blob/main/src/vdom/diff-patch-web.ts)：
+对产物的变更动作我们简单抽象为“增、删、改”三种，“增”在指定位置插入结点，“删”删除当前结点，“改”修改属性，包括文本内容、样式、事件句柄等，以修改样式为例说明动作的定义和具体实现，完整代码见[这里](https://github.com/EverSeenTOTOTO/mini-framework/blob/main/src/vdom/diff-patch-web.ts)：
 
 ```ts
 export type ActionChangeDetail = 'text' | 'style' | 'event';
@@ -407,14 +407,14 @@ export function diffPatch(source: VNode, target: VNode) {
     }
   }
 
-  // 复用source关联的DOM
+  // actions operate on source.output, by setting target.output === source.output we reuse the DOM node
   target.output = source.output;
 
   return actions;
 }
 ```
 
-对属性的Diff大多数时候是比较两个对象的键值对；对`children`的Diff是一个动态规划问题，我们限制编辑动作一次只能做一件事，这样所有动作的代价为1，通过比较序列的长度获取代价最小的编辑序列。根据算法描述，设计了三种编辑动作：
+对属性的Diff大多数时候是比较两个对象的键值对；对`children`的Diff是一个动态规划问题，我们限制编辑动作一次只能做一件事，这样所有动作的代价为1，通过比较序列的长度获取代价最小的编辑序列。根据Diff Patch算法描述，设计了三种编辑动作，求出最小编辑序列后再逐个生成对应的Patch动作：
 
 1. `keep`：结点同时存在于S和T中，保留但递归下降比对子结点和属性；
 2. `insert`：T中新增的结点；
@@ -529,11 +529,11 @@ export function render(vdom: web.VNode, container: HTMLElement) {
 
 Diff Patch同时也是实现SSR“水化”的关键，这是废话，不表。
 
-#### 组件
+### 组件
 
 什么是组件，上面点了一下，组件的出现是为了逻辑复用，逻辑复用最基础的方式就是抽象成函数，所以组件本质就是一个生成VDOM的函数。那为什么又有所谓的class组件和functional组件之分呢？这还得从FP和OOP思想的差异说起，我假设读者已经对FP的常见概念，如“纯函数”、“副作用”有所了解，因为感觉我接下来的表达还不够清晰。
 
-函数有其内部状态，每次执行时函数体内定义的变量分配在其栈上，每次执行完成都会随着函数栈帧的销毁回收。所以理论上只要参数不变函数的每次执行都应该得到相同的效果，但实际上对非纯函数式的语言，由于闭包捕获、获取时间戳、写入标准输出流等外部状态的变化，即使参数没变，函数在不同的时机执行也可能得到不同的效果。有时这会造成难以察觉的BUG，因此我们应该尽可能编写“纯”的、前后行为一致的函数，这样的函数对其使用者来说，只代表一段逻辑，是个黑盒。那逻辑要操作的数据放在哪里呢？一种方法是用函数表达数据结构，这是可行的，但比较晦涩，我在[JS原型继承](./Javascript.md#H3b3a160a963d49a3)这一节的末尾处写了一个例子。更符合人们直觉的是用`struct`之类的东西表达一个数据结构，因此理想的状态是：用对象表达一组数据，前端常称之为状态`state`，用一组纯函数表达操作这个对象的逻辑，比如`render`，只要提供的状态相同，函数的行为（输出的VDOM）始终相同：
+函数有其内部状态，每次执行时函数体内定义的变量分配在其栈上，每次执行完成都会随着函数栈帧的销毁回收。所以理论上只要参数不变函数的每次执行都应该得到相同的效果，但实际上对非纯函数式的语言，由于闭包捕获、获取时间戳、写入标准输出流等外部状态的变化，即使参数没变，函数在不同的时机执行也可能得到不同的效果。有时这会造成难以察觉的BUG，因此我们应该尽可能编写“纯”的、前后行为一致的函数，这样的函数对其使用者来说，只代表一段固定的逻辑，是个黑盒。那逻辑要操作的数据放在哪里呢？一种方法是用函数表达数据结构，这是可行的，但比较晦涩，我在[JS原型继承](./Javascript.md#H3b3a160a963d49a3)这一节的末尾处写了一个例子。更符合人们直觉的是用`struct`之类的东西表达一个数据结构，因此理想的状态是：用对象表达一组数据，前端常称之为状态`state`，用一组纯函数表达操作这个对象的逻辑，比如`render`，只要提供的参数相同，函数的行为（输出的VDOM）始终相同：
 
 ```ts
 const state = {
@@ -544,7 +544,7 @@ const state = {
 const render = (state) => { /* ... */ };
 ```
 
-class组件只不过做得内聚一点，将一个状态和它相关的一组逻辑放在了一起，这更加符合人们对事物的直觉了，也是OOP理念获得成功的关键。但另一方面，假如class的内部状态不加以管理，外界可以绕过class提供的逻辑（类方法），直接操作其内部状态，这很可能破坏类设计者书写逻辑时的假设，也是React不断强调要用`setState`改变状态的原因：
+class组件只不过做得内聚一点，将一个状态和它相关的一组逻辑放在了一起，这更加符合人们对事物的直觉了，也是OOP理念获得成功的关键。但另一方面，假如class的内部状态不加以管理，外界可以绕过class提供的逻辑（类方法），直接操作其内部状态，这很可能破坏类设计者书写逻辑时的假设，也是React不断强调要用`setState`改变状态的浅层原因：
 
 ```ts
 const o = {
@@ -562,7 +562,8 @@ o.state.width = "No, please no!";
 
 o.render(); // !!! Oooops
 ```
-函数可以嵌套组合所以组件可以嵌套组合，就像前面用例中那样，`fragment`、`div`、`button`算是一些内置组件，我们还需要给用户提供自定义组件的能力，并且框架要对这些组件一视同仁。很自然地想到，`VNode`的抽象能够覆盖这一场景，我们新设计一种`VNode`子类型来代表组件，正如[React文档](https://reactjs.org/blog/2015/12/18/react-components-elements-and-instances.html#component-elements)中的这句话：**An element describing a component is also an element, just like an element describing the DOM node. They can be nested and mixed with each other.**
+
+函数可以嵌套组合所以组件可以嵌套组合，就像前面用例中那样，`fragment`、`div`、`button`算是一些内置组件，我们还需要给用户提供自定义组件的能力，并且框架要对这些组件一视同仁。很自然地想到，VDOM结点的抽象能够覆盖这一场景，我们新设计一种`VNode`子类型来代表组件，正如React文档中所说的：**An element describing a component is also an element, just like an element describing the DOM node. They can be nested and mixed with each other.**
 
 ```ts
 export interface VNodeComponent<T> extends VNodeBase<T, 'component'> {
@@ -595,7 +596,13 @@ export function evalComponent(node: VNodeComponent) {
 export function diffPatchComponent(source: VNodeComponent, target: VNodeComponent) {
   if (!source.vdom) throw new Error('source not initialized');
 
-  return diffPatch(source.vdom, target.component(target.state));
+  const vdom = target.component(target.state);
+  const actions = diffPatch(source.vdom, vdom);
+
+  // source can be === to target, see hooks, so we can't move this statement up
+  target.vdom = vdom;
+
+  return actions;
 }
 ```
 
@@ -635,15 +642,15 @@ export function diffPatchComponent(source: VNodeComponent, target: VNodeComponen
 
 <img src="./render-component.gif" />
 
-### 状态管理
+### 响应式和状态管理
 
-上面这个例子很重要很重要，因为它引出了响应性话题：我们需要手动绑定状态改变后的重绘逻辑，这正是jQuery被淘汰的关键。这个例子中只要在按钮按下后更新状态还好，假如还有`<input>`标签呢？我们不仅要在状态改变时更改输入框里面的值，还要在用户输入后将变化同步到状态，即所谓的“**双向绑定**”。一个两个元素都需要手动绑定一组状态更新逻辑，应用复杂之后根本顶不住，稍有疏忽就会产生BUG。因此React和Vue最大的贡献是实现了响应性，我们只需要关注状态变更，由框架完成重绘或同步UI状态给应用状态的操作。
+上面这个例子很重要很重要，因为它引出了响应性话题：我们需要手动绑定状态改变后的重绘逻辑，这正是jQuery被淘汰的原因。这个例子中只要在按钮按下后更新状态还好，假如还有`<input>`标签呢？我们不仅要在状态改变时更改输入框里面的值，还要在用户输入后将输入变化同步给应用状态，即所谓的“**双向绑定**”。一个两个元素都需要手动绑定一组状态更新逻辑，应用复杂之后根本顶不住，稍有疏忽就会产生BUG。因此React和Vue最大的贡献是实现了响应性，我们只需要关注状态变更，由框架完成重绘或同步UI状态给应用状态的操作。
 
 #### React
 
 ##### useState
 
-到目前为止，我们所谓的重绘是将组件函数重新执行了一遍，这建立在组件函数都是纯函数的假设之上，同时框架内部有VDOM缓存和状态缓存，通过比对新旧状态触发Diff Patch，通过比对VDOM判断是否需要更新真实DOM结点，这是典型的React模式。上面用例不能自动触发重绘的根源在于：`onClick`里面修改`state`的动作**对框架来说是不可感知的**。还记得我们前面提到的class的坏处吗？`state`是一个数据结构，`render`是操作这个数据结构的一段逻辑，那么`onClick`中`state.count += 1`就是绕过了类设计者的心理预期，“偷偷摸摸”修改状态的行为，下面是便于理解的伪码：
+到目前为止，我们所谓的重绘是将组件函数重新执行了一遍，这建立在组件函数都是纯函数的假设之上，同时框架内部有VDOM缓存和状态缓存，通过比对新旧状态触发Diff Patch，这是典型的React模式。上面用例不能自动触发重绘的根源在于：`onClick`里面修改`state`的动作**对框架来说是不可感知的**。还记得我们前面提到的class的坏处吗？`state`是一个数据结构，`render`是操作这个数据结构的一段逻辑，那么`onClick`中`state.count += 1`就是绕过了类设计者的心理预期，“偷偷摸摸”修改状态的行为，下面是便于理解的伪码：
 
 ```ts
 class AnonymousClass {
@@ -696,7 +703,7 @@ class AnonymousClass extends React.Component {
 
 我接触React的时间其实要晚于Vue，那时已经是React Hooks元年了。所以我几乎没怎么书写过class组件。那么在函数式组件中，要怎么达成同样效果呢？答案已经呼之欲出了，状态在外面放哪儿根本无所谓，重点是提供一个包装过的方法，这个方法看起来只是修改状态的，其实里面还封装了触发重绘的逻辑，这不就是`useState`吗！
 
-于是我们可以做一件有趣的事情，绕过React官方的`useState`，自己造一个，这是在真实的React项目中编写的例子：
+于是我们可以做一件有趣的事情，绕过React官方的`useState`，自己造个一次性青春版，这是在真实的React项目中编写的例子：
 
 ```ts
 import { createRoot } from 'react-dom/client';
@@ -743,7 +750,7 @@ const Foo = () => {
 }
 ```
 
-像上面这样不能达成目标，每次`Foo`执行都会挂载一个Timer，解决方案依然是在函数外设置缓存，记下Timer ID和上次的`timeout`值，`Foo`里面通过与缓存的比对判断是否需要执行`setTimeout`：
+像上面这样不能达成目标，即使`timeout`不变，其他因素引起`Foo`重绘，每次执行都会挂载一个Timer，也没有清理掉之前的Timer。解决方案依然是在函数外设置缓存，记下Timer ID和上次的`timeout`值，`Foo`里面通过与缓存的比对判断是否需要执行`setTimeout`：
 
 ```ts
 let lastTimeoutId;
@@ -761,7 +768,7 @@ const Foo = () => {
 }
 ```
 
-显而易见，这又是一个应该由框架提供的能力，我们将副作用用一个函数包装，并告知框架在哪些状态变化时执行之。理解这一点之后，在刚刚绕过`React.useState`的基础上，我们也可以“淘汰”`React.useEffect`自己实现一个低配版：
+显而易见，这又是一个应该由框架封装的能力，我们将副作用用一个函数包裹，并告知框架在哪些状态变化时才执行之。理解这一点之后，在刚刚绕过`React.useState`的基础上，我们也可以“淘汰”`React.useEffect`自己实现一个低配版：
 
 ```diff
 let memo: unknown;
@@ -812,7 +819,7 @@ const App = () => {
 
 `useState`和`useEffect`是其他Hooks的基石，还有些React18新出现的Hooks我还不是很熟悉就不介绍了。现在我们要做的，就是汇总以上知识，在自己的微型React框架中实现真正可复用的Hooks，而不是上面的一次性“青春版”。
 
-实现的难点其实是怎么封装“青春版”Hooks用到的那些全局变量，比如`memo`和`initOrClear`，因为我们不知道用户会调用多少次`useState`，不可能预先准备足够的全局变量。那用数据结构吧，直观的想法是哈希表，但是用什么作为键呢？我最初的想法是直接用状态作为键，值代表状态是否`dirty`，很快意识到思路不对，例如`useState([])`，别忘了组件函数每次都会重新执行，所以每次都会创建一个新的`[]`，和上次的`[]`不是一个东西。而且我一开始并没有想到将状态存在组件VNode上，而是想偷懒，用一个全局状态存储，每一项代表一个`useState`创建的状态，那么每一项都需要和其所在的组件关联起来，这里尝试了各种方法都不太行，最后翻了一下Preact的源码才恍然大悟：将状态存在组件上，设置两个全局变量`currentComponent`和`currentHookId`，每次组件函数执行之前将`currentComponent`设置为该组件，将`currentHookId`置`0`，这样组件函数内部调用`useState`时就能通过`currentComponent`拿到当前组件，通过`currentHookId`拿到`useState`所创建状态的编号并作为哈希表的键，这就很好地解释了1. React要求Hooks只能在组件函数内部执行，否则拿不到`currentComponent`；2. React要求Hooks不能放置在分支语句下面，因为走不同分支可能导致`currentHookId`错位。
+实现的难点其实是怎么封装“青春版”Hooks用到的那些全局变量，比如`memo`和`initOrClear`，因为我们不知道用户会调用多少次Hook，不可能预先准备足够的全局变量。那用数据结构吧，因为有一个查找旧状态进行比对的过程，首先想到哈希表，但是用什么作为键呢？我最初的想法是直接`WeakMap`用状态作为键，值代表状态是否`dirty`，很快意识到思路不对，例如`useState([])`，别忘了组件函数每次都会重新执行，所以每次都会创建一个新的`[]`，和上次的`[]`不是一个东西。而且我一开始并没有想到将状态存在组件VNode上，反而想偷懒，用一个全局状态存储，每一项代表一个Hook创建的状态，那么每一项都需要和其所在的组件关联起来，`useEffect`的实现也变复杂了。尝试了各种方法都有BUG，最后翻了一下Preact的源码才恍然大悟：将状态存在组件上，设置两个全局变量`currentComponent`和`currentHookId`，每次组件函数执行之前将`currentComponent`设置为该组件，将`currentHookId`置`0`，这样组件内部调用Hook时就能通过`currentComponent`拿到当前组件，通过`currentHookId`拿到Hook所创建状态的编号并作为哈希表的键，这很好地解释了1. React要求Hooks只能在组件内部执行，否则拿不到`currentComponent`；2. React要求Hooks不能放置在分支语句下面，必须是函数体top level，因为走不同分支可能导致`currentHookId`错位。
 
 具体实现上可以聪明一点，在创建`VNodeComponent`的时候对`component`做个封装，免得后面用到的地方还要重复处理：
 
@@ -830,8 +837,8 @@ export interface VNodeComponent<T> extends VNodeBase<T, 'component'> {
 + let currentComponent: VNodeComponent;
 + export const getCurrentComponent = () => currentComponent;
  
-+ let hookId = 0;
-+ export const getCurrentHookId = () => hookId++;
++ let currentHookId = 0;
++ export const getCurrentHookId = () => currentHookId++;
 
 export const h = (component: (state: unknown) => VNode, state?: unknown) => {
   const vnode: VNodeComponent = {
@@ -839,7 +846,7 @@ export const h = (component: (state: unknown) => VNode, state?: unknown) => {
 -    component,
 +    component: (s?: unknown) => {
 +      currentComponent = vnode;
-+      hookId = 0;
++      currentHookId = 0;
 +      return component(s);
 +    },
 +    hookState: new Map(),
@@ -853,7 +860,107 @@ export const h = (component: (state: unknown) => VNode, state?: unknown) => {
 
 #### Vue
 
+class组件将一个数据结构和它相关的逻辑内聚在一起本意是好的，响应式的问题其实只是我们按照符合自己思维模式的方式`this.state.count += 1`改变状态的时候，框架不知道我们做了这样的改变。如果，我是说如果，有一个框架能够让我们以这种更自然的方式编写代码，一个状态更新了，那么所有关联的状态和副作用都自动更新或触发，不需要手动声明依赖关系，你会更青睐这个框架吗？
+
+没错，这样的框架是存在的，它就是~Svelte~ ~Mobx~ Vue。实现这个机制的关键在于两个设计模式：**代理模式和观察者模式**。如果说React是对人们修改状态的方法做了限制（`setState`），那么Vue就是对我们初始化状态的方法做了限制（`ref`）。我们使用框架API初始化状态之后拿到的其实是一个代理对象，而这个代理本身又是一个被观察的目标，当它改变时，会主动推送更改至所有观察者。由于初始化只要做一次，心智负担通常轻很多。
+
+JS从语言层面支持对象代理，我们用一小段代码就可以说清楚Vue的响应式原理：
+
+```ts
+type Effect = (oldVal: unknown, newVal: unknown) => void;
+
+const observers: Effect[] = [];
+const target = { value: 42 };
+
+// Vue3
+const proxy = new Proxy(target, {
+  set(t, p, newValue) {
+    const oldValue = Reflect.get(t, p);
+    const result = Reflect.set(t, p, newValue);
+
+    observers.forEach((ob) => ob(newValue, oldValue));
+
+    return result;
+  },
+});
+
+
+// Vue2
+// const proxy: Record<string | symbol, unknown> = {};
+
+// Object.defineProperty(proxy, 'value', {
+//   set(newValue) {
+//     const oldValue = target.value;
+//
+//     target.value = newValue;
+//     observers.forEach((ob) => ob(newValue, oldValue));
+//   },
+//   get() {
+//     return target.value;
+//   },
+// });
+
+const watch = (callback: Effect) => {
+  observers.push(callback);
+
+  return () => observers.splice(observers.indexOf(callback), 1);
+};
+
+const unwatch = watch((o, n) => console.log(`oldValue: ${o}, newValue: ${n}`));
+
+proxy.value = 0; // oldValue: 42, newValue: 0
+
+unwatch();
+
+proxy.value = 42; // silent
+```
+
+现在我们作为框架的实现者，要做的就是把上面这段代码进一步抽象，使之成为用户可用的API。用户初始化状态时，在API内部，创建代理对象，并预设一些触发Diff Patch的`observers`，最后返回这个代理给用户即可。通过在状态初始化时做一点额外工作，以后更改状态时就能“精确定位”到关联的VDOM、衍生状态、副作用等等。
+
+Vue3说它的Hooks只需要执行一次，这是针对`setup`函数只需要执行一次来说的。在去掉所有的语法糖之后，`setup`函数返回的那个函数（在Vue语境中称为渲染函数）才真正和React语境中的组件函数是等价的。因此，得益于我们的微型React和Vue使用同一套VDOM后端，在我们的框架中可以写出这样一段“疯狂”的代码：
+
+```ts
+const counter = {
+  setup() {
+    const ref = vue.ref(0);
+
+    vue.watch(ref, (n) => console.log(`Outside: ${n}`));
+
+    return () => {
+      const [count, setCount] = react.useState(ref.value);
+
+      react.useEffect(() => console.log(`Inside: ${count}`), [count]);
+
+      return fragment([
+        div([`${ref.value}`, `${count}`]),
+        button(['Outside'], {onClick: () => {ref.value += 1;}}),
+        button(['Inside'], {onClick: () => setCount(count + 1)}),
+      ]);
+    };
+  },
+};
+```
+
+把使用Vue Hooks定义的状态理解为类的数据，返回的渲染函数是操作数据的类成员函数，React Hooks提供了在纯函数内部定义状态和副作用的手段，理清楚这一点之后应该不难理解`setup`其实是个变相的constructor：
+
+```ts
+class Counter {
+  state = { vue hook states },
+  render = () => {
+    react hooks;
+
+    return vdom;
+  }
+}
+```
+
+具体实现上有一个注意点：Vue Hook定义的状态可能与渲染函数无关，当它们改变时不需要触发渲染函数的重新执行。解决方案也很简单，渲染函数要用到的状态，在渲染函数被执行时一定会`get`它的值，因此我们只在`getter`里面增加状态改变触发Diff Patch的观察者就行，这也是Vue原理所说的先触摸（touch）再追踪（track）。其他实现细节和React组件大同小异，甚至可以直接复用之前的`VNodeComponent`类型而不用额外定义一个新的`VNode`类型，因为`setup()`返回的渲染函数就是一个React语境中的组件函数。完整代码在[这里](https://github.com/EverSeenTOTOTO/mini-framework/blob/main/src/vue/index.ts)。
+
+至此，我们的微型框架主体也基本完成了，不算测试案例的话，总计不到1000行代码，还是很nice的。
+
 #### DDD的启发
+
+### 其他话题
 
 #### Context和`provide/inject`
 
@@ -864,8 +971,6 @@ React Context和Vue的`provide/inject`机制是跨组件层级通信的一条“
 #### React Fiber
 
 Fiber Reconciliation架构。
-
-#### React18的启示
 
 ## 单元测试
 
