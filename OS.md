@@ -1,6 +1,6 @@
 # 前端与操作系统
 
-## 进程、线程和协程
+## 进程（Process）、线程（Thread）和协程（Coroutine/Fiber）
 
 ### 并发和并行
 
