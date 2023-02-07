@@ -1023,15 +1023,63 @@ Jest加Testing-Utils基本满足了我的日常需求，E2E测试考虑Playwrigh
 
 ## 跨端解决方案
 
-有兴趣一定要看Electron核心开发者的[文章](https://www.electronjs.org/blog/electron-internals-node-integration)及在[这个知乎话题](https://www.zhihu.com/question/36292298)下的回复。
+有兴趣一定要看Electron核心开发者在[这个知乎话题](https://www.zhihu.com/question/36292298)下的回复。
+
+我知道的跨端解决方案大致有这么几种：
+
+1. 在底层套了浏览器设施的，例如Chromium或WebView，代表是Electron和Tauri等；
+2. 为VDOM层适配Native渲染后端的，代表是早期的Weex、React Native和小程序等；
+3. 造了除渲染引擎之外几乎整套轮子的，代表是Flutter、Weex和React Native的新架构等。
+
+技术细节等会再说，先谈谈选型的问题。Electron和Tauri主要对标Desktop，竞争的是以往QT/GTK的地位，我作为前端开发者还是很支持的，站在企业的角度招聘前端开发者比起招聘C++开发者也要轻松一点，前端生态也更丰富。不过比起QT/GTK确实存在性能差异。Electron还有个让人诟病的点是每个App里面都套个Chromium，应用体积过大也显得笨重。Tauri使用WebView规避了这一问题，底层又是用Rust开发的，性能上得到很大的提升，所以火起来也并不奇怪。Weex、RN和小程序的出现最早应该是因为H5容器的性能不足以满足业务要求，在Native层面做适配能充分发挥定制能力，但是随着服务端渲染技术的回归现在Web应用也可以获得几乎不逊色于原生App的体验，而小程序平台本身由于各个大厂竞相造轮子搞得乱像丛生的现状也让人望而却步。Flutter的问题在于Dart，这已经被人吐嘈过一万遍了，我也是很不理解为什么要重新制造一门语言来实现功能，看到很多解释都苍白无力，难道是大厂一贯的制造商业护城河吸引用户黏度的手段？
+
+### Electron
+
+Electron面临的一个重要技术问题就是整合两个事件循环，因为多数GUI框架都有自己的一套事件循环，而且通常必须是主线程，在Chromium中就是底层的`Message Loop`，而目标平台NodeJS，底层libuv，也是事件驱动的模型，有自己的事件循环。Electron核心开发者的[文章](https://www.electronjs.org/blog/electron-internals-node-integration)讲述了这个问题，
 
 ## 服务端框架
 
 ### Express和Koa
 
+用烂了已经。其中间件解耦的方式目测是受到了函数式编程中`compose/flowRight`方法的启发，还是挺精巧的。
+
+```ts
+const ctx: Context = {};
+const middlewares: Middleware[] = [];
+
+let index = 0;
+
+const next = () => {
+  const currentMiddleware = middlewares[index++];
+
+  if (currentMiddleware) {
+    currentMiddleware(ctx, next);
+  }
+};
+
+middlewares.push((_ctx, next) => {
+  console.log(1);
+  next();
+  console.log(4);
+});
+
+middlewares.push((_ctx, next) => {
+  console.log(2);
+  next();
+  console.log(3);
+});
+
+next(); // 1 2 3 4
+```
+
 ### Nest.js
+
+号称“NodeJS端的Spring”，内核其实还是一个Express服务器，外层套上了TS装饰器那套控制反转和依赖注入的实现，Spring的模块、控制器、过滤器等概念都有，我自己也是很青睐这个框架，只不过多数时候个人小项目用不上罢了。
 
 ### SSR框架
 
+主流的应该是Next.js、Nuxt.js和Astro吧，我对SSR技术有过一段[调研](https://www.everseenflash.com/CS/Frontend/SSR%20Practise.md#Hdb33a7d5a16e1d97)，这些框架也在调研的过程中尝试了下，理解SSR技术的话这些框架倒没有什么特别之处，优点是有大型团队背书很多功能开箱即用，缺点是一旦自定义的程度比较高要深入底层就比较麻烦。
+
 ## 国际化与a11y
 
+国际化我只用过i18next这个框架，体验上和以前写QT时到处`tr()`差不多。至于a11y我只能说有所耳闻，好像没看到多少小型团队真的在意这个……
