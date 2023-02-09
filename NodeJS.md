@@ -57,10 +57,6 @@ console.log(d == d2); // true
     delete require.cache['d.js']
     ```
 
-## 事件循环
-
-和[浏览器事件循环](./Web.md#H5034ac5ad9f9ac78)放一起了。
-
 ### 钩子函数
 
 在NodeJS生态经常看到各种各样的Registers可以控制NodeJS加载模块的行为，是通过修改`require.extensions`来指示NodeJS如何处理某类后缀的文件实现的，社区也有[pirates](https://github.com/danez/pirates)这样的工具库，修改的是`Module._extensions`，其实是等价的：
@@ -96,6 +92,10 @@ hello world
 ```
 
 不过NodeJS长期将这种机制标记为废弃，并明确指出会降低性能或造成微妙的BUG。在ESM模块中，NodeJS又提供了一套实验性的[Loader API](https://nodejs.org/docs/latest-v14.x/api/esm.html#esm_loaders)，我还没有用过。
+
+## 事件循环
+
+和[浏览器事件循环](./Web.md#Ha66cbcf318b4d371)放一起了。
 
 ## `spawn`、`fork`和`exec`
 

@@ -16,11 +16,29 @@
 
 并行（Parallel）：多核CPU同时执行。
 
+### 阻塞、非阻塞、多路复用、异步IO
+
+资料来源于网络，[这篇](https://segmentfault.com/a/1190000003063859)写得比较好，因为谈论NodeJS或者浏览器底层事件循环的时候总会提到这些名词，补充一下。
+
+阻塞：IO请求会阻塞当前进程；
+
+非阻塞：IO请求不会阻塞当前进程，而是立即得到一个错误`EAGAIN`告知用户数据还没准备好，用户需自行轮询；
+
+多路复用：即常说的select、poll和epoll，进程在调用`select`的时候被阻塞，操作系统内核会查看select负责的所有socket，只要任何一个socket的数据就绪了，select就返回。比起阻塞的优势是能同时处理多个连接。epoll比起select/poll的改进是用fd回调避免了轮询fd；
+
+> Windows上对应物是iocp，mac上是kqueue。
+
+异步IO：前三者都属于同步IO。异步IO请求不会阻塞当前进程，而是立即返回，数据就绪后由内核主动通知进程。
+
+#### 为什么非阻塞也属于同步IO？
+
+这个要看“同步IO”的定义，一般在整个IO请求的过程中都不阻塞进程才称为“异步IO”，而整个IO请求有两个步骤，1. 操作系统内核等待数据拷贝到内核缓冲区；2. 操作系统内核将数据从内核缓冲区拷贝到用户进程地址空间。非阻塞IO在用户轮询探知到数据就绪后，调用系统调用拷贝内核缓冲区到进程地址空间的阶段还是会阻塞用户进程，而异步IO是整个过程完成后才通知进程。
+
 ### Future和Promise
 
 “基于承诺的异步”是现在普遍使用的编写异步代码的模式，在创建异步任务时用一个数据结构表示异步任务的结果，这个数据结构通常有三种状态：Pending、Fulfilled和Rejected，分别表示任务仍在执行、任务已成功完成且结果已填入该数据结构和任务执行失败。通常任务状态由Pending变为Fulfilled或Rejected之后就不允许改变。
 
-之前写过一些[代码片段](https://www.everseenflash.com/CS/Snippets/GeneratorAutoRun.md)大致表达了我对JS中Promise的理解：`Promise`和`async/await`是Coroutine的语法糖，Coroutine和Channel的抽象有异曲同工的地方，Channel的底层可以想见是信号量、锁、原子操作这些老东西。
+之前写过一些[代码片段](https://www.everseenflash.com/CS/Snippets/GeneratorAutoRun.md)大致表达了我对JS中Promise的理解：`Promise`和`async/await`是Coroutine的语法糖，Coroutine和单写者Channel的抽象有异曲同工的地方，Channel的底层可以想见是信号量、锁、原子操作这些老面孔。
 
 #### `join`和`detach`
 
@@ -103,10 +121,6 @@ Exiting main thread.
 Exiting concurrent thread.
 Destructing Demo
 ```
-
-### poll、epoll和select
-
-> Windows上对应物是iocp，mac上是kqueue。
 
 ## 文件系统
 
