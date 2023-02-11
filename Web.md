@@ -20,6 +20,10 @@
 
 ## DOM Event
 
+向上称为冒泡，向下称为捕获。在冒泡处理回调是默认的行为，可用`stopPropagation()`阻断，会按照自底向上的路径传播事件。但如果我们在`addEventListener`的时候设置了`{ capture: true }`属性，这时触发的事件会先从根元素向下走到目标元素，再向上回到根元素，即先捕获再冒泡，此时`stopPropagation`阻断的是捕获的过程。
+
+有时要阻止浏览器对某些事件的默认响应行为，例如点击链接时发生跳转，可使用`preventDefault()`。
+
 ## 事件循环相关
 
 ### Web平台
@@ -28,7 +32,7 @@
 
 宏任务的概念实际上并不存在，只是为了和微任务对应而附会的一个概念。[浏览器标准](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops)中相关的概念应该是Task，代表了诸如事件调度、timers回调、DOM、网络等任务。重点在8.1.7.3节Processing Model，每次完成一个任务会有一个微任务检查点，如果当前微任务队列不为空，则持续运行微任务直到队列为空，然后才会做一次Update the rendering。
 
-在屏幕上有一个`position: fixed`的按钮，像下面这段代码，点击按钮能明显看到按钮闪烁了一下，如果将`setTimeout`改为`queueMicrotask`则不会，这或许能作为Task和Microtask执行时机的一个例子，变更DOM是一次Task，执行完之后有一个微任务检查点，因此会先处理掉重置`btn.style.left`的回调再作渲染，而`setTimeout`创建的是Task，用`MessageChannel`和`setTimeout`是同样的效果。
+在屏幕上有一个`position: fixed`的按钮，像下面这段代码，点击按钮能明显看到按钮闪烁了一下，如果将`setTimeout`改为`queueMicrotask`则不会，这或许能作为Task和Microtask执行时机的一个例子，变更DOM是一次Task，执行完之后有一个微任务检查点，因此会先处理掉重置`btn.style.left`的回调再作渲染。而`setTimeout`创建的是Task，用`MessageChannel`和`setTimeout`是同样的效果。比较特殊的是`requestAnimationFrame`，虽然是宏任务，但从标准中可以看出它运行在Update the rendereing阶段，但处在Layout/Paint的小阶段之前，所以如果用`requestAnimationFrame`也不会闪烁。
 
 ```js
 const btn = document.querySelector('button')!;
@@ -155,9 +159,71 @@ process.nextTick(() => console.log('2'));
 
 ## hash和history路由
 
-## CORS
+## 同源策略与CORS
 
-## XSS和CSRF
+跨域问题也是前端开发中常见的问题了。搞清楚这个首先得了解浏览器的同源策略。
+
+两个网址只有在协议、端口和主机字段相同的时候才被当作是同源的，因此HTTP和HTTPS被认为是不同源，二级域名不同也被认为是不同源。出于安全考虑，在不同源的情况下，Cookie、localStorage和IndexDB无法读取，AJAX请求也不能发送，DOM无法获得（常出现于`<iframe>`）。
+
+很多时候需要绕过这些限制，AJAX请求通常采用下面会介绍的CORS方法，因此这里简要介绍下另外两类问题跨源时绕过的方式：
+
+1. Cookie：对于一级域名相同，二级域名不同的网页，可以通过手动设置`document.domain`的方式共享Cookie；另一种方法是服务器在设置Cookie的时候指定Cookie所属的域名；
+
+2. iframe（囊括了localStorage/IndexDB）：存在一些技巧性的方法，但系统的解决还是推荐`window.postMessage`。
+
+CORS，因为O代表的是“origin”所以它更应该被称为“跨源资源共享”，是一种通过额外的[HTTP响应头](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#the_http_response_headers)，让服务器有能力标示除了自身以外的其它源（域、协议或端口），浏览器看到这些HTTP头会放开默认的同源策略。
+
+日常中其实我更青睐用Nginx做代理的方式解决跨域问题，通过Nginx访问把原本跨域的请求变成同源请求的方式。更进一步，还可以利用http-proxy-middleware之类的库自己搭个简易代理服务器，这样自由调整代理逻辑，比起编写Nginx糟糕的DSL更轻松一点，可能性也更多。我常做的一件事就是利用Git把这些经常变更的nginx.conf或者代理服务器脚本管理起来，随用随分支切换。
+
+下面是一个真实的例子，客户端应用部署在`http://localhost:3001`，服务端应用部署在`http://localhost:5000`，由于端口不同，在客户端应用里`fetch('http://localhost:5000')`将导致跨域：
+
+```js
+fetch('http://localhost:5000'); // CORS error
+```
+
+我们做个简易的代理服务器，部署在`8080`端口，`/`代理的是原客户端应用，`/api`代理的是原服务端应用，转发的时候重写路径去掉`/api`：
+
+```js
+const express = require('express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
+const app = express();
+
+app.use(
+  '/',
+  createProxyMiddleware({
+    target: 'http://127.0.0.1:3001',
+  })
+);
+
+app.use(
+  '/api',
+  createProxyMiddleware({
+    target: 'http://127.0.0.1:5000',
+    pathRewrite: { '^/api': '' }
+  })
+);
+
+app.listen(8080);
+```
+
+现在统一通过代理服务器访问客户端应用和服务端应用就没有跨域问题了：
+
+```js
+fetch('http://localhost:8080/api'); // 200 OK
+```
+
+CORS还有个话题是浏览器在发起CORS请求的时候，会将请求区分为简单请求和非简单请求，简单请求的请求方法只能是HEAD、GET、POST且使用的HTTP头有限，不满足这些条件的都是非简单请求。简单请求在发起时会带上Web应用所在的Origin，而非简单请求在发起前会先发送一个“预检请求”，用的是OPTIONS，这当然是一次额外的开销，只是在被拒绝的情况下相比起直接发非简单请求“动静要小”。~这个预检请求让我联想到无线局域网802.11的信道预约请求。~
+
+## XSS、注入和CSRF
+
+XSS分三种，存储型、反射型和DOM型。前两种差别不大，基本都有网页存在注入漏洞让不法分子上传恶意脚本到服务器端的前提，在用户输入二次确认的场景尤其容易出现。DOM型则不涉及服务端，是不法分子拦截了发送到用户客户端的静态资源，然后修改或嵌入了一些错误信息诱使用户点击跳转至恶意网站、或者窃取用户信息的行为。
+
+关于注入我想说的是不要试图用正则表达式匹配的方式去检测用户输入，有一万种代码混淆的方式可以绕过这些正则表达式。合理的做法是始终对用户输入做转义，例如`encodeURIComponent`，如果非要执行用户脚本不可的话，尽量在沙箱环境中执行。
+
+CSRF即“我成替身了”，不法分子通过社工等手段窃取用户的安全令牌、Cookie等身份验证信息，在用户会话还存活（令牌/Cookie还有效）的情况下，伪装成用户进行操作。
+
+## CSP
 
 ## Web Component
 
@@ -168,5 +234,7 @@ process.nextTick(() => console.log('2'));
 ### H5键盘
 
 ### 微信白屏
+
+### 嵌套滚动容器
 
 ### `<audio>`标签
