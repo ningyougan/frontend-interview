@@ -2,7 +2,7 @@
 
 ## Web应用框架
 
-本文主要介绍React和Vue，前者做为FP思想的范例，后者作为OOP思想的范例，把握住这两点，很多问题就迎刃而解。后来出现的Svelte、Solid等，个人觉得只是在VDOM应用与否、模板预编译优化程度上的取舍，在Web这个特定场景可能有进一步的性能提升，但总体来说并没有特别让人眼前一亮的地方。而且我非常讨厌Svelte又双叒创造了一套模板语法的行为。
+本文主要介绍React和Vue，前者做为FP思想的范例，后者作为OOP思想的范例，把握住这两点，很多问题就迎刃而解。后来出现的Svelte、Solid等，个人觉得只是在VDOM应用与否、模板预编译优化程度、动态还是静态响应性上的取舍，在Web这个特定场景可能有进一步的性能提升，但总体来说并没有特别让人眼前一亮的地方。而且我非常讨厌Svelte又双叒创造了一套模板语法的行为。
 
 比较特殊的是Angular，将Spring那套控制反转（IOC）和依赖注入（DI）的思想引入了前端应用的设计中，能够理解IOC和DI，并且知道[怎么用`reflect-metadata`实现装饰器](https://www.everseenflash.com/CS/Snippets/Macro.md#H047e72df69d52b2e)的话Angular也没什么神秘的。甚至有巨硬官方的[轮子](https://github.com/microsoft/tsyringe)可以复用。我的观点和社区里一些观点一致，Angular更适合专业性比较高的大型团队使用，想用好有一定的门槛，普通开发者和小型团队使用可能适得其反。
 
@@ -818,6 +818,9 @@ const App = () => {
 
 ```
 
+在真实的React中，`useEffect`会先记下要执行的副作用，在组件渲染后异步执行，这里React和Preact存在不同点：Preact是同步的。也是和`componentDidMount`与`componentDidUpdate`不同的点。
+
+
 `useState`和`useEffect`是其他Hooks的基石，还有些React18新出现的Hooks我还不是很熟悉就不介绍了。现在我们要做的，就是汇总以上知识，在自己的微型React框架中实现真正可复用的Hooks，而不是上面的一次性“青春版”。
 
 实现的难点其实是怎么封装“青春版”Hooks用到的那些全局变量，比如`memo`和`initOrClear`，因为我们不知道用户会调用多少次Hook，不可能预先准备足够的全局变量。那用数据结构吧，因为有一个查找旧状态进行比对的过程，首先想到哈希表，但是用什么作为键呢？我最初的想法是直接`WeakMap`用状态作为键，值代表状态是否`dirty`，很快意识到思路不对，例如`useState([])`，别忘了组件函数每次都会重新执行，所以每次都会创建一个新的`[]`，和上次的`[]`不是一个东西。而且我一开始并没有想到将状态存在组件VNode上，反而想偷懒，用一个全局状态存储，每一项代表一个Hook创建的状态，那么每一项都需要和其所在的组件关联起来，`useEffect`的实现也变复杂了。尝试了各种方法都有BUG，最后翻了一下Preact的源码才恍然大悟：将状态存在组件上，设置两个全局变量`currentComponent`和`currentHookId`，每次组件函数执行之前将`currentComponent`设置为该组件，将`currentHookId`置`0`，这样组件内部调用Hook时就能通过`currentComponent`拿到当前组件，通过`currentHookId`拿到Hook所创建状态的编号并作为哈希表的键，这很好地解释了1. React要求Hooks只能在组件内部执行，否则拿不到`currentComponent`；2. React要求Hooks不能放置在分支语句下面，必须是函数体top level，因为走不同分支可能导致`currentHookId`错位。
@@ -858,6 +861,12 @@ export const h = (component: (state: unknown) => VNode, state?: unknown) => {
 ```
 
 完整的Hooks实现代码见[这里](https://github.com/EverSeenTOTOTO/mini-framework/blob/main/src/react/index.ts)。
+
+##### `useLayoutEffect`
+
+`useLayoutEffect`的出现是为了解决这么一类问题，有时你需要展示一个Tooltip，并且根据Tooltip自身内容高度可能需要将它放置在锚点元素的上面或下面，这意味着我们要获取Tooltip的宽高信息，而我们不挂载Tooltip怎么知道宽高呢？但如果先挂载再计算那不就让用户看到了Tooltip从错误的位置或者错误的高度变化到正确样式的过程了吗？这时就迫切需要一个在DOM变更后，但是在浏览器渲染之前的Hook来处理这个过程，即`useLayoutEffect`。
+
+再结合`useLayoutEffect`是同步的，大致可以推断出`useLayoutEffect`也是Diff阶段先记下回调，在Patch之后渲染之前立即同步执行。这一点和我最初的推测还是很不一样的，我一开始认为`useLayoutEffect`产生的回调是以微任务队列的方式“卡”在DOM变更（Task）和更新渲染阶段之间的，这其实也能说得通，只是没想到它居然是同步的。
 
 #### Vue
 

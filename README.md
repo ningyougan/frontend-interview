@@ -23,7 +23,6 @@
 + [Web Assembly相关](./WebAssembly.md)
 + [Web3相关](./Web3.md)
 + [工作经验谈](./Experience.md)
-+ [假如我负责技术面](./Interview.md)
 
 ## 段子
 
