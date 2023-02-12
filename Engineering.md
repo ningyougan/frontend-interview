@@ -281,7 +281,7 @@ Less和Sass是所谓的CSS预处理工具，它们最终还是编译为CSS文件
 
 ### TSC
 
-TSC在前端工程化领域里主要被用于类型检查和生成类型文件，虽然TSC本身也提供了编译TS文件的功能，不过实践中为了统一性通常都是用Webpack/Rollup等构建为JS代码，TSC使用`--emitDeclarationOnly`仅输出类型定义。这种情况下有个比较麻烦的东西是路径别名，Webpack/Rollup/TSC各自的别名不能互通，需要多次配置，且TSC编译后并不处理别名，往往还要用ts-alias之类的库处理之。
+TSC在前端工程化领域里主要被用于类型检查和生成类型文件，虽然TSC本身也提供了编译TS文件的功能，不过实践中为了统一性通常都是用Webpack/Rollup等构建为JS代码，TSC使用`--emitDeclarationOnly`仅输出类型定义。这种情况下有个比较麻烦的东西是路径别名，Webpack/Rollup/TSC各自的别名不能互通，需要多次配置，且TSC编译后并不处理别名，往往还要用ts-alias之类的库处理之。另有巨硬提供的工具[api-extractor](https://api-extractor.com/)。
 
 ### Git hooks
 

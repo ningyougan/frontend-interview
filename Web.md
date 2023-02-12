@@ -28,8 +28,6 @@
 
 ### Web平台
 
-#### 宏任务和微任务
-
 宏任务的概念实际上并不存在，只是为了和微任务对应而附会的一个概念。[浏览器标准](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops)中相关的概念应该是Task，代表了诸如事件调度、timers回调、DOM、网络等任务。重点在8.1.7.3节Processing Model，每次完成一个任务会有一个微任务检查点，如果当前微任务队列不为空，则持续运行微任务直到队列为空，然后才会做一次Update the rendering。
 
 在屏幕上有一个`position: fixed`的按钮，像下面这段代码，点击按钮能明显看到按钮闪烁了一下，如果将`setTimeout`改为`queueMicrotask`则不会，这或许能作为Task和Microtask执行时机的一个例子，变更DOM是一次Task，执行完之后有一个微任务检查点，因此会先处理掉重置`btn.style.left`的回调再作渲染。而`setTimeout`创建的是Task，用`MessageChannel`和`setTimeout`是同样的效果。比较特殊的是`requestAnimationFrame`，虽然是宏任务，但从标准中可以看出它运行在Update the rendereing阶段，但处在Layout/Paint的小阶段之前，所以如果用`requestAnimationFrame`也不会闪烁。
@@ -153,11 +151,85 @@ process.nextTick(() => console.log('2'));
 
 在有了`queueMicrotask`之后，`process.nextTick()`可以被视为不推荐使用了，`queueMicrotask`创建的是和`Promise`同等优先级的微任务，便于梳理程序执行流。
 
+特别一提，现在还能找到一些文章说NodeJS的事件循环和浏览器的事件循环不同，NodeJS会在每个阶段之间才检查微任务队列，而非在一个宏任务之后就有一个微任务检查点，这是NodeJS@11版本之前的行为，早改了。
+
 ## 二进制数据的处理
 
 [ZSBD](https://www.everseenflash.com/CS/Frontend/Binary.md)
 
 ## hash和history路由
+
+hash路由的原理是浏览器在监听到`hashchange`事件之后并不会刷新页面，这个功能本来是给页内锚点用的，所以使用hash路由的问题会导致没法做锚点了，如果还需要类似锚点功能的话可以自己`scrollIntoView()`，同时hash路由传参也不方便，需要序列化为URL字符串，还有长度限制。
+
+history路由的原理在于history的几个API可以改变浏览器路由栈却不刷新页面，其中`pushState`和`replaceState`还可以改变页面URL，再配合`popstate`事件，可以实现路由效果。比较奇怪的是`pushState`和`replaceState`默认不会触发`popstate`事件，需要我们自己调度。
+
+Vue3两种模式的`vue-router`简要实现如下：
+
+```js
+export const RouterView = defineComponent({
+  render() {
+    return h(this.$router.current.value?.component);
+  },
+});
+
+class BaseRouter {
+  routes: Route[];
+
+  current: ShallowRef<Route | undefined>;
+
+  constructor(routes: Route[]) {
+    this.routes = routes;
+    this.current = shallowRef();
+    window.addEventListener('load', this.navigate.bind(this));
+  }
+
+  navigate() {
+    throw new Error('Method not implemented.');
+  }
+
+  install(app: App) {
+    app.config.globalProperties.$router = this;
+    app.component('RouterView', RouterView);
+  }
+}
+
+export class HashRouter extends BaseRouter {
+  constructor(routes: Route[]) {
+    super(routes);
+    window.addEventListener('hashchange', this.navigate.bind(this));
+  }
+
+  navigate(): void {
+    const hash = window.location.hash.slice(1).replace(/^$/, '/');
+    const route = this.routes.find((r) => r.path === hash);
+
+    if (!route) throw new Error(`Route not found: ${hash}`);
+
+    this.current.value = route;
+  }
+}
+
+export class HistoryRouter extends BaseRouter {
+  constructor(routes: Route[]) {
+    super(routes);
+    window.addEventListener('popstate', this.navigate.bind(this));
+  }
+
+  navigate(): void {
+    const path = window.location.pathname.replace(/^$/, '/');
+    const route = this.routes.find((r) => r.path === path);
+
+    if (!route) throw new Error(`Route not found: ${path}`);
+
+    this.current.value = route;
+  }
+
+  push(path: string): void {
+    window.history.pushState({ path }, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+}
+```
 
 ## 同源策略与CORS
 
@@ -231,10 +303,30 @@ CSRF即“我成替身了”，不法分子通过社工等手段窃取用户的�
 
 ### `1px`边框
 
-### H5键盘
+在移动端比如iOS设备默认的设备像素比通常是2，这意味着如果我们设置`border`宽度为`1px`的话看起来要比设计稿上面要粗一点，但如果设置成`0.5px`的话在一些老旧机型上又不支持，常见的解决方案有`border-image`模拟、`box-shadow`模拟、`transform: scale(0.5)`缩放等。
 
-### 微信白屏
+### 键盘
 
-### 嵌套滚动容器
+移动端键盘主要解决的问题是如何确保其顶起页面，不会遮挡住处在页面下方的输入框，以及是否会使输入框失去焦点的问题。细分为原生键盘和前端H5键盘两类。
 
-### `<audio>`标签
+1. 原生键盘：各个系统自带键盘的兼容性问题非常严重，也没有个统一的标准获取键盘弹起之后的时间、高度等信息。所以如果是App内，最佳的解决方案是由原生实现，并提供一些API给前端调用。如果非要在前端考虑各种边界情况的话，可参考[这篇文章](https://segmentfault.com/a/1190000018959389)。
+
+2. H5键盘：前端实现的键盘就比较简单了，可以拿到键盘的实际高度去推高页面。
+
+### 滚动穿透
+
+### `click` 300ms
+
+移动端点击延迟300ms的原因最早是浏览器需要判断一下用户想做的是双击缩放还是单纯的点击。主流解决方案有三，一是著名的FastClick，原理是自定义事件并阻止默认的`click`事件，二是直接设置`<meta>`禁用缩放，三是使用`touch`事件或`pointer`去处理。
+
+### iPhoneX刘海适配
+
+在标题头组件里针对iPhoneX机型做一下适配即可。
+
+### audio autoplay
+
+这个倒不是BUG，而是浏览器为了避免给用户造成困扰的默认行为，audio、video和fullscreen API都有类似不能自动进行的机制。用户必须亲自操作过页面之后才能够自动播放音频，代码模拟`button.click()`都是不行的。一般和业务与组件使用方沟通好，将需要自动播放的场景隐藏在用户需要操作页面之后的某个阶段里。
+
+### 白屏
+
+我知道的白屏问题分为两种，不算SPA加载慢导致的白屏耗时，一类是关键代码出错框架没法正确挂载应用导致的白屏，一般是因为浏览器版本比较老旧不支持新语法导致的，这类问题通常借助构建工具和polyfill手段将代码输出为兼容性更好的版本，条件允许的话还可以做按需加载polyfill；第二类我仅在微信H5页面遇到过，通过抓包分析推测是微信缓存了旧的HTML，一个相当SB的行为，HTML里面的`script`资源链接过时导致的，这个主要通过在服务端设置HTTP缓存头，告知浏览器不要缓存HTML来解决。

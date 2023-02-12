@@ -1023,7 +1023,7 @@ React Context和Vue的`provide/inject`机制是跨组件层级通信的一条“
 
 #### React 合成事件
 
-React合成事件是我觉得一个“过度设计”的东西，它的本意可能是提高更好的兼容性，但也确实给不了解这一事件系统的人来说带来了不少麻烦。
+React合成事件是我觉得有点“过度设计”的东西，它的本意可能是提高更好的兼容性，同时也规避了异步调度状态更新所引起的一些边缘问题（见下文Vue的`nextTick`），但也确实给不了解这一事件系统的人来说带来了不少麻烦。
 
 #### React Fiber
 
@@ -1032,6 +1032,65 @@ Fiber Reconciliation架构，如果要我用一句话来解释它就是“应用
 要理解React改变架构的动机，首先需对浏览器运行中每一帧所做的事情有所了解，目前主流显示器都是60FPS（在Chrome中，可以Ctrl+Shift+P输入“FPS”，有个显示帧率的功能），因此一帧大约是16.7ms，浏览器在这一帧内要完成处理用户输入——执行Timer——计算样式、rAF——Layout和Paint——rIC（有剩余空闲）等操作，其中JS的长时间执行会挤压或推迟渲染的进行。在React16以前，也包括我们前面实现的微型React，其Diff Patch过程都是自顶向下递归地遍历VDOM树实现的，框架没有办法Hack到JS底层的调用栈来中断执行，这意味着如果VDOM树非常庞大，将造成显著的卡顿。
 
 怎么解决呢？既然递归执行框架不好控制，那改成迭代呗。Fiber架构的第一个改变就是用迭代而非是递归实现后序遍历，具体表现为在树的每一个结点中设置三个指针：`child`指向首个子结点、`sibling`指向右兄弟、`return`指向父结点，遍历时先`child`再`sibling`最后返回到`return`。其次要知道什么时候中断，很自然地想到以结点为工作单元，在遍历过程中动态为每个VDOM结点创建对应的Fiber结点。同时React在有限的rIC时间片内进行Diff，如果时间余额不足则等待有新的空闲时间片再开始下一个结点。为了防止DOM更新不连续，Diff之后的Patch过程依然是一次性完成的，不可中断。
+
+#### Vue 生命周期
+
+Vue文档中“挂载到DOM”的说法只是指创建挂载或Patch了DOM结点，并不意味着浏览器已经做了渲染。假如我们在`mounted`钩子或`updated`钩子里面做个无限的微任务队列，虽然VDOM关联的DOM结点更新了，浏览器却没有机会渲染之。再者，将生命周期钩子声明为异步的并不会影响钩子触发的顺序，但是会影响钩子回调与状态更新引起的浏览器渲染之间的顺序。像下面两段代码，第一个例子我们不会看到浏览器渲染出最新的状态，但是通过DOM API能够看到DOM状态已更新；第二个例子则能够看到渲染发生，因为从事件循环的角度说`sleep`安排的timers任务是晚于`updated`事件触发时的渲染的：
+
+```js
+updated() {
+  block(); // const block = () => queueMicrotask(block);
+}
+
+async updated() {
+  await sleep(1); // const sleep = (timeout) => new Promise((resolve) => setTimeout(resolve, timeout));
+  block();
+},
+```
+
+1. beforeCreate: props解析之后、`data()`、`computed`选项之前立即调用；
+2. created: `data()`、`computed`、`methods`等均可用，但还未挂载所以没有`$el`，适用于预取一些数据;
+3. beforeMount: 挂载之前调用，子组件在这之后才创建；
+4. mounted: 整棵子树（仅同步子组件）已被挂载到DOM上，此时`$el`可用；
+5. beforeUpdate: Diff之后，Patch之前，此时状态已更新，但还没有反馈到DOM结点上；
+6. updated: Patch之后，此时DOM已更新，但浏览器还未渲染，因此如果要访问渲染后的DOM需使用`nextTick`；
+7. beforeUnmount: 组件被卸载之前，此时组件还保有全部功能；
+8. unmount: 整棵子树已卸载，常被用来做一些清理工作；
+9.  activated: 和mounted类似，用于被缓存的组件；
+10.  deactivated: 和unmount类似，用于被缓存的组件。
+
+在嵌套的层级中，从父组件`beforeMount`开始才创建子组件，子组件挂载好才挂载父组件。父组件传下来的props更新时，父组件的`beforeUpdate`钩子先触发。
+
+#### Vue `nextTick`
+
+Vue的`nextTick`，它起这个名字估计是考虑到了与NodeJS提供的`process.nextTick`的相似之处，对状态的更新可以看成是触发了一个事件，而产生的响应式副作用可以看成是事件的回调，由于Vue内部的优化，回调并非是同步执行的，而是存储在队列中，等到各种修改状态的同步逻辑执行完再统一flush掉，这可以产生一种“合并”状态更新的效果。
+
+Vue中的`nextTick`与`process.nextTick`的区别在于，它的实现曾经在宏任务和微任务之间反复横跳。各有缺点，微任务由于在每个Task之后都有检查点，可能在诸如事件传播等内部Task之前触发，典中典是这个[issue](https://github.com/vuejs/vue/issues/6566)：
+
+```html
+<div v-if="expand">
+  <i @click="expand = false">Expand is True</i>
+</div>
+<div v-else @click="expand = true">
+  <i>Expand is False</i>
+</div>
+```
+
+在Vue早期版本，`nextTick`是微任务，点击`<i>`始终只能看到`Expand is True`字样，因为`nextTick`微任务在事件冒泡到外层`div`之前触发，由于VDOM结构相同，Vue会复用原有的DOM，仅仅在Patch的时候给`<div>`加上`@click`句柄，当事件传过来之后，`<div>`的回调被触发于是`expand`依然被设置为`true`，触发第二次更新，之后才有浏览器渲染。当时可行的解决方案是使用`key`来告知Diff算法将它们视为两个不同的结点。
+
+中期Vue尝试过宏任务实现或者微/宏任务混用的策略，宏任务的问题就更明显了，根据浏览器时间循环，每个Task执行完都有一个微任务检查点和一次Update the Rendering的机会，很可能由于宏任务的低优先级导致出现样式闪烁。
+
+现在`nextTick`的[实现](https://github.com/vuejs/vue/blob/main/src/core/util/next-tick.ts)已经稳定在微任务版本，只有需要fallback的时候才会切换到宏任务。并且对事件回调做了[特殊处理](https://github.com/vuejs/vue/blob/main/src/platforms/web/runtime/modules/events.ts#L56)，让事件回调只可能被它`attach`之后才产生的事件触发，这就避免了刚才被触发两次的问题。
+
+#### Vue slot
+
+#### Vue KeepAlive组件
+
+#### Vue Teleport组件
+
+#### Vue `v-if`和`v-show`
+
+`v-show`只是简单调整下`display`属性，不会破坏组件树，`v-if`则真的会删除重建整棵子树，因此会触发相应的生命周期事件，频繁切换的话开销也更大。
 
 ## 单元测试
 
