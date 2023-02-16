@@ -281,8 +281,6 @@ ESM即ES Module，以`import`和`export`关键字为代表，常见于TS、Deno�
     console.log(m); // { foo: 42, bar: [Function: bar], default: 24 }
     ```
 
-这几种导入机制还牵涉到Tree Shaking的概念，见[这里](./PerformanceOptimization.md#H38b4ccab34e94afd)。
-
 ### IIFE
 
 IIFE即“立即执行函数”，本身不是模块机制，但联系紧密，也历史悠久。如果非要解释它是什么，用代码表达比较好：`(() => {})()`。按照我的理解，IIFE有两大好处：
@@ -317,9 +315,6 @@ IIFE即“立即执行函数”，本身不是模块机制，但联系紧密，�
 
 }));
 ```
-### 动态加载
-
-`require`支持动态拼接模块名，要实现批量加载可以考虑`glob`、`globby`之类的库。在有Polyfill辅助情况下，或者现代Web平台上，`import`也可以作为函数使用`import(filepath)`，返回的是一个`Promise`，加载成功则提供一个模块对象。`import()`是实现[模块分割及懒加载](./PerformanceOptimization.md#Hb077d6089e59b828)的基础。
 
 ### 循环依赖
 
@@ -361,7 +356,9 @@ export const bar = 24;
 
 执行`a`时遇到对`b`的导入，于是去执行`b`，由于`b`中对`a`的导入是异步的，`b`可以成功加载完成，随后`a`加载完成，再执行`import()`创建的微任务且因为`a`的[模块缓存](https://nodejs.org/docs/latest-v14.x/api/modules.html#modules_caching)而不需要重新导入`a`。
 
-在网上还看到CJS导入的是模块浅拷贝、ESM导入的是模块引用的说法，但是我看了很多这类文章的示例代码，总觉得是作者没有理清楚闭包捕获、JS对象展开的特性。我还是不在这个话题上发表言论了。
+### 动态加载
+
+`require`支持动态拼接模块名，要实现批量加载可以考虑`glob`、`globby`之类的库。在有Polyfill辅助情况下，或者现代Web平台上，`import`也可以作为函数使用`import(filepath)`，返回的是一个`Promise`，加载成功则提供一个模块对象。`import()`是实现[模块分割及懒加载](./PerformanceOptimization.md#Hb077d6089e59b828)的基础。但是`import()`自身不是ESM模块规范的一部分，而是另一个[独立的提案](https://github.com/tc39/proposal-dynamic-import)，实际上由于ESM模块[“静态模块结构”](https://exploringjs.com/es6/ch_modules.html#static-module-structure)的特点，ESM的导入导出只能出现在Top Level，且不能含有动态的部分，这意味着我们可以在编译阶段分析模块的导入导出，这是实现[Tree Shaking](./PerformanceOptimization.md#H38b4ccab34e94afd)的前提。
 
 ### 相互转化
 

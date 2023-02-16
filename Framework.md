@@ -864,7 +864,7 @@ export const h = (component: (state: unknown) => VNode, state?: unknown) => {
 
 ##### `useLayoutEffect`
 
-`useLayoutEffect`的出现是为了解决这么一类问题，有时你需要展示一个Tooltip，并且根据Tooltip自身内容高度可能需要将它放置在锚点元素的上面或下面，这意味着我们要获取Tooltip的宽高信息，而我们不挂载Tooltip怎么知道宽高呢？但如果先挂载再计算那不就让用户看到了Tooltip从错误的位置或者错误的高度变化到正确样式的过程了吗？这时就迫切需要一个在DOM变更后，但是在浏览器渲染之前的Hook来处理这个过程，即`useLayoutEffect`。
+`useLayoutEffect`的出现是为了解决这么一类问题，有时你需要展示一个Tooltip，并且根据Tooltip自身内容高度可能需要将它放置在锚点元素的上面或下面，这意味着我们要获取Tooltip的宽高信息，而我们不挂载Tooltip怎么知道宽高呢？但如果先挂载再计算那不就让用户看到了Tooltip从错误的位置调整到正确样式的过程了吗？这时就迫切需要一个在DOM变更后，但是在浏览器渲染之前的Hook来处理这个过程，即`useLayoutEffect`。
 
 再结合`useLayoutEffect`是同步的，大致可以推断出`useLayoutEffect`也是Diff阶段先记下回调，在Patch之后渲染之前立即同步执行。实话说这一点和我最初的推测还是很不一样的，我一开始认为`useLayoutEffect`产生的回调是以微任务队列的方式“卡”在DOM变更（Task）和更新渲染（Update the rendering）阶段之间的，这其实也能说得通，只是没想到它居然是同步的。
 
@@ -1031,7 +1031,7 @@ Fiber Reconciliation架构，如果要我用一句话来解释它就是“应用
 
 要理解React改变架构的动机，首先需对浏览器运行中每一帧所做的事情有所了解，目前主流显示器都是60FPS（在Chrome中，可以Ctrl+Shift+P输入“FPS”，有个显示帧率的功能），因此一帧大约是16.7ms，浏览器在这一帧内要完成处理用户输入——执行Timer——计算样式、rAF——Layout和Paint——rIC（有剩余空闲）等操作，其中JS的长时间执行会挤压或推迟渲染的进行。在React16以前，也包括我们前面实现的微型React，其Diff Patch过程都是自顶向下递归地遍历VDOM树实现的，框架没有办法Hack到JS底层的调用栈来中断执行，这意味着如果VDOM树非常庞大，将造成显著的卡顿。
 
-怎么解决呢？既然递归执行框架不好控制，那改成迭代呗。Fiber架构的第一个改变就是用迭代而非是递归实现后序遍历，具体表现为在树的每一个结点中设置三个指针：`child`指向首个子结点、`sibling`指向右兄弟、`return`指向父结点，遍历时先`child`再`sibling`最后返回到`return`。其次要知道什么时候中断，很自然地想到以结点为工作单元，在遍历过程中动态为每个VDOM结点创建对应的Fiber结点。同时React在有限的rIC时间片内进行Diff，如果时间余额不足则等待有新的空闲时间片再开始下一个结点。为了防止DOM更新不连续，Diff之后的Patch过程依然是一次性完成的，不可中断。
+怎么解决呢？既然递归过程框架不好控制，那改成迭代呗。Fiber架构的第一个改变就是用迭代而非是递归实现后序遍历，具体表现为在树的每一个结点中设置三个指针：`child`指向首个子结点、`sibling`指向右兄弟、`return`指向父结点，遍历时先`child`再`sibling`最后返回到`return`。其次要知道什么时候中断，很自然地想到以结点为工作单元，在遍历过程中动态为每个VDOM结点创建对应的Fiber结点。同时React在有限的rIC时间片内进行Diff，如果时间余额不足则等待有新的空闲时间片再开始下一个结点。为了防止DOM更新不连续，Diff之后的Patch过程依然是一次性完成的，不可中断。
 
 #### React setState
 

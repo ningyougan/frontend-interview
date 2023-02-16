@@ -22,7 +22,25 @@
 
 ### Flex和Grid布局
 
-Flex布局本身好像没什么可说的，各种属性也没必要死记硬背，忘了就查。重点应该是理解为什么要用布局而非人工去计算位置，布局的意义在于提供一层抽象，避免CSS代码高度耦合，一个元素变了其他所有相关元素都需要重新计算位置，难以长期维护。
+[Flex布局](https://www.w3.org/TR/css-flexbox-1/#flex-common)本身好像没什么可说的，各种属性也没必要死记硬背，忘了就查。重点应该是理解为什么要用布局而非人工去计算位置，布局的意义在于提供一层抽象，避免CSS代码高度耦合，一个元素变了其他所有相关元素都需要重新计算位置，难以长期维护。
+
+容器级别：
+
+1. `flex-direction`：确定主轴方向；
+2. `flex-wrap`：轴线上排不下时的换行方式；
+3. `justify-content`：主轴对齐方式；
+4. `align-items`：交叉轴对齐方式：
+5. `align-content`：多轴对齐方式，如果只有一根轴线则不起作用。
+
+子项级别：
+
+1. `order`：项目的排列顺序，越小越靠前；
+2. `flex-grow`：项目放大比例，默认为`0`，即使有剩余空间也不会放大；
+3. `flex-shrink`：项目缩小比例，默认为`1`，即如果空间不足会缩小；
+4. `flex-basis`：项目占据的主轴空间，默认为`auto`，即项目的本来大小；
+5. `align-self`：定义自身的对齐方式，可覆盖容器`align-items`属性。
+
+子项`flex`属性是`flex-grow`, `flex-shrink`和`flex-basis`的简写。`flex: initial`为`0 1 auto`；`flex: <positive number>`代表`flex: <positive number> 1 0`；`flex: auto`等价于`flex: 1 1 auto`；`flex: none`等价于`flex: 0 0 auto`。
 
 我之前面临的兼容性问题比较严重，业务要求适配低端机型，Grid布局用得很少，差不多还只是现查现用的状态。
 
