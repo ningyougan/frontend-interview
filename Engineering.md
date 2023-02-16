@@ -126,6 +126,107 @@ module.exports = {
 
 Loader应用的顺序默认与声明的顺序是相反的。这里先由`sass-loader`将`.sass`或`.scss`文件处理为CSS，然后由`css-loader`处理导入的CSS模块，再由`style-loader`将输出的CSS代码以`<style>`标签的形式注入到DOM中。显然这个顺序是不可以乱掉的。如果真需要手动调整Loader应用的顺序，可参考[Rule.enforce](https://webpack.js.org/configuration/module/#ruleenforce)选项。
 
+关于Loader顺序我想起一个真实的需求，实现组件的按需加载和自动加载。我们以前用的UI组件比较庞大，鱼龙混杂在一起竟有2MB之多，引入的时候要么利用Vue插件做全量导入，要么逐个手动导入特定组件非常麻烦，这种情况实现组件的自动按需加载就很有意义。当时我还不知道babel-plugin-import的存在，所以参考了[quasar的实现](https://github.com/quasarframework/vue-cli-plugin-quasar)，具体步骤是：
+
+1. 在UI组件构建的同时生成一份组件的清单，列出每个组件的导入名称和文件路径；
+2. 实现两个Webpack Loader，分别处理Vue SFC和JS代码，前者提取模板语法中使用到组件的名字，在`<script>`块中根据清单嵌入相应的导入代码，后者处理渲染函数方式的用法；
+3. 确保处理SFC配置的Loader在`vue-loader`之前应用，在`@vue/cli`项目中可使用`webpack-chain`提供的`.before(vue-loader)`，自己实现则利用Loader顺序调整现有配置。
+
+##### VueLoader的实现
+
+VueLoader分为Loader和Plugin两个组成部分。Plugin的作用是修改配置的规则，如下，除了`rules`是原有规则外，其他的都是Plugin新增的：
+
+```ts
+// replace original rules
+compiler.options.module!.rules = [
+  pitcher,
+  ...jsRulesForRenderFn,
+  templateCompilerRule,
+  ...clonedRules,
+  ...rules,
+]
+```
+
+`jsRulesForRenderFn`和`templateCompilerRule`的作用顾名思义，`pitcher`我们等会再说。在Plugin调整完配置后，进入正式的Webpack模块解析过程，Loader首先会使用`compiler-sfc`解析SFC文件，重点是拿到和缓存下面这么一个数据结构，分别存放了各个区块的信息，包括源码和AST等：
+
+```js
+{
+  filename: 'App.vue',
+  source: 'content of App.vue',
+  template: {},
+  styles: [],
+  script: [],
+  customBlocks: [],
+}
+```
+
+根据这些信息，Loader生成如下代码：
+
+```js
+import { render } from "./App.vue?vue&type=template&id=7ba5bd90&scoped=true"
+import script from "./App.vue?vue&type=script&setup=true&lang=js"
+export * from "./App.vue?vue&type=script&setup=true&lang=js"
+
+import "./App.vue?vue&type=style&index=0&id=7ba5bd90&lang=scss&scoped=true"
+
+import exportComponent from "node_modules/vue-loader/dist/exportHelper.js"
+const __exports__ = /*#__PURE__*/exportComponent(script, [['render',render],['__scopeId',"data-v-7ba5bd90"],['__file',"src/App.vue"]])
+
+if (module.hot) {
+  /* hot reload code */
+}
+
+export default __exports__
+```
+
+这段代码重点在于给SFC的各个区块生成了对应的导入语句，并利用Webpack的resource query添加了额外信息。Plugin中拷贝或新增的规则，都添加了`Rule.resource`或`Rule.resourceQuery`配置来利用这些信息以避免僭越，确保只处理`.vue`文件，例如`templateCompilerRule`：
+
+```js
+const templateCompilerRule = {
+  loader: require.resolve('./templateLoader'),
+  resourceQuery: (query?: string) => {
+    if (!query) {
+      return false
+    }
+    const parsed = qs.parse(query.slice(1))
+    return parsed.vue != null && parsed.type === 'template'
+  },
+  options: vueLoaderOptions,
+}
+```
+
+Webpack在检测到新的模块导入语句后，会开始新模块的解析，这时前面提到的`pitcher` Loader就会起作用，[Pitching Loader](https://webpack.js.org/api/loaders/#pitching-loader)利用到了Webpack内部处理Loader的顺序机制，`pitcher`中返回了结果，于是跳过剩余已配置Loader的处理。它的作用是生成一套内联Loader，指明到底该怎么处理每个区块。其中可以看到克隆规则的影子，类似下面这样，开头的`-!`是Webpack以内联方式书写Loader规则时的特定语法，效果是屏蔽其他normal和pre Loader：
+
+```js
+export * from "-!../node_modules/esbuild-loader/dist/index.js??clonedRuleSet-5.use[0]!../node_modules/vue-loader/dist/templateLoader.js??ruleSet[1].rules[2]!../node_modules/vue-loader/dist/index.js??ruleSet[0]!./App.vue?vue&type=template&id=7ba5bd90&scoped=true"
+```
+
+```js
+export { default } from "-!../node_modules/esbuild-loader/dist/index.js??clonedRuleSet-5.use[0]!../node_modules/vue-loader/dist/index.js??ruleSet[0]!./App.vue?vue&type=script&setup=true&lang=js"; 
+export * from "-!../node_modules/esbuild-loader/dist/index.js??clonedRuleSet-5.use[0]!../node_modules/vue-loader/dist/index.js??ruleSet[0]!./App.vue?vue&type=script&setup=true&lang=js"
+```
+
+```js
+export * from "-!../node_modules/mini-css-extract-plugin/dist/loader.js!../node_modules/css-loader/dist/cjs.js??clonedRuleSet-2.use[1]!../node_modules/vue-loader/dist/stylePostLoader.js!../node_modules/postcss-loader/dist/cjs.js??clonedRuleSet-2.use[2]!../node_modules/sass-loader/dist/cjs.js!../node_modules/vue-loader/dist/index.js??ruleSet[0]!./App.vue?vue&type=style&index=0&id=7ba5bd90&lang=scss&scoped=true"
+```
+
+在内联Loader配置中也可以看到`vue-loader/dist/index.js`的影子，因此会第二次进入Loader主方法，根据一个简单的条件判断，调用`selectBlock`从之前缓存的SFC解析结果中提取信息并回归Webpack正常的模块解析过程，将数据交给上面排在`vue-loader`之后的克隆规则处理：
+
+```ts
+if (incomingQuery.type) {
+  return selectBlock(
+    descriptor,
+    id,
+    options,
+    loaderContext,
+    incomingQuery,
+    !!options.appendExtension
+  )
+}
+```
+
+---
+
 #### Resolve
 
 Resolve控制Webpack如何进行模块解析，和模块解析有关的比如路径别名、文件类型支持、解析算法查找过程都在这个范围内。Resolve模块背后是[enhanced-resolve](https://github.com/webpack/enhanced-resolve)这个包，建立在Tapable之上，基本可以看作是一个功能更强也更复杂的[`require.resolve`](https://nodejs.org/docs/latest-v14.x/api/modules.html#modules_require_resolve_request_options)实现。假如我们要实现类似http import或者glob import之类的功能，就可以从Resolve插件入手。
@@ -144,7 +245,7 @@ Devtools主要控制Source Map的生成，Source Map在性能优化这里有单�
 
 #### Externals
 
-Externals也是比较常用的一个配置项，被标记为External的模块其源码并不会被Webpack打包到构建产物中，因此别人使用构建产物的时候需要自己安装并注入这些模块。External模块的角色对构建产物来说类似于静态链接库。假如我们正在开发一个基于Vue的组件，是不大可能把Vue源码也打包到组件产物中的，不仅避免臃肿和浪费磁盘空间，也避免各组件“自备”一套Vue实现可能产生的各种问题。
+Externals也是比较常用的一个配置项，被标记为External的模块其源码并不会被Webpack打包到构建产物中，因此别人使用构建产物的时候需要自己安装并注入这些模块。External模块的角色对构建产物来说类似于动态链接库。假如我们正在开发一个基于Vue的组件，是不大可能把Vue源码也打包到组件产物中的，不仅避免臃肿和浪费磁盘空间，也避免各组件“自备”一套Vue实现可能产生的各种问题。
 
 关于Externals我还想起一个Webpack的BUG，综合性很强，我花了整整一个下午才找到问题的根源。找出原因之后可以用如下简化的`main.js`文件及`webpack.config.js`复现问题：
 

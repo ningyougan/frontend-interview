@@ -2,10 +2,6 @@
 
 ## HTTP与Restful
 
-### HTTP状态码
-
-### HTTP缓存
-
 ## HTTPS
 
 ## HTTP2、HTTP3

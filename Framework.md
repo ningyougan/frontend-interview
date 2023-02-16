@@ -700,7 +700,7 @@ class AnonymousClass extends React.Component {
 }
 ```
 
-在真正的React中更新状态的行为是异步的，假如连续执行了两次`setState`，由于内部任务调度，第一个`setState`很可能还没有作用到`this.state`上，于是第二次`setState`执行时`this.state`是错误的。应使用`this.setState((s) => ({ count: s.count + 1 }))`，依然是“惰性求值”的思想，React在`setState`时只是记下这个函数，推迟直到有最新的状态才执行之。不得不说这又是一个心智负担，光这一点足以让人淘汰class组件了。
+在真正的React中更新状态的行为是异步的，不能简单地使用`this.state.count + 1`计算新值，[后文](#H704caeb6d4339f2b)有更详细的介绍。
 
 我接触React的时间其实要晚于Vue，那时已经是React Hooks元年了。所以我几乎没怎么书写过class组件。那么在函数式组件中，要怎么达成同样效果呢？答案已经呼之欲出了，状态在外面放哪儿根本无所谓，重点是提供一个包装过的方法，这个方法看起来只是修改状态的，其实里面还封装了触发重绘的逻辑，这不就是`useState`吗！
 
@@ -1033,9 +1033,82 @@ Fiber Reconciliation架构，如果要我用一句话来解释它就是“应用
 
 怎么解决呢？既然递归执行框架不好控制，那改成迭代呗。Fiber架构的第一个改变就是用迭代而非是递归实现后序遍历，具体表现为在树的每一个结点中设置三个指针：`child`指向首个子结点、`sibling`指向右兄弟、`return`指向父结点，遍历时先`child`再`sibling`最后返回到`return`。其次要知道什么时候中断，很自然地想到以结点为工作单元，在遍历过程中动态为每个VDOM结点创建对应的Fiber结点。同时React在有限的rIC时间片内进行Diff，如果时间余额不足则等待有新的空闲时间片再开始下一个结点。为了防止DOM更新不连续，Diff之后的Patch过程依然是一次性完成的，不可中断。
 
+#### React setState
+
+这里主要讨论`setState`同步和异步的话题。
+
+首先排除一个无关问题，下面代码片段中，无论将`console.log(state.count)`包裹在宏任务还是微任务里都只能打印出旧值，但这是因为闭包捕获的缘故：
+
+```ts
+const App = () => {
+  const [state, setState] = useState({ count: 0 });
+
+  return <button onClick={() => {
+    setState({ count: state.count + 1 });
+    queueMicrotask(() => console.log(state.count)); // 总是旧值
+  }}>Count: {state.count}</button>;
+};
+```
+
+在class中，即可看到`setState`的异步表现。下面的代码片段，打印的是旧值，但如果将`console.log`语句包裹在一个宏任务或微任务里，将打印出最新值：
+
+```ts
+class App extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { count: 0 };
+  }
+
+  render() {
+    return <button onClick={() => {
+      this.setState({ count: this.state.count + 1 });
+      console.log(this.state.count); // 旧值
+      // queueMicrotask(() => {
+      //   console.log(this.state.count); // 新值
+      // });
+    }}>
+      count: {this.state.count}
+    </button>;
+  }
+}
+```
+
+此外在class组件中添加这段代码，在React@18以前会打印`0, 2`，在React@18以后会打印`0, 1`。即所谓的“React@18以前，在timers回调（和DOM事件回调中），`setState`是同步的”：
+
+```ts
+componentDidMount() {
+  this.setState({
+    count: 1,
+  });
+  console.log(this.state.count); // 旧值
+
+  setTimeout(() => {
+    this.setState({
+      count: 2,
+    });
+    console.log(this.state.count); // 新值
+  });
+
+  // const btn = document.querySelector('button')!;
+
+  // btn.addEventListener('click', () => {
+  //   this.setState({
+  //     count: 2,
+  //   });
+  //   console.log(this.state.count); // 新值
+  // });
+}
+```
+
+因此，我们要解释清楚三个问题：
+
+1. 为什么同步调用`setState`，对状态的更新是异步的？
+2. 为什么在React@18以前，异步调用`setState`，状态更新是同步的？
+3. 为什么在React@18以后，不管怎么调用`setState`，状态更新总是异步的？
+
 #### Vue 生命周期
 
-Vue文档中“挂载到DOM”的说法只是指创建挂载或Patch了DOM结点，并不意味着浏览器已经做了渲染。假如我们在`mounted`钩子或`updated`钩子里面做个无限的微任务队列，虽然VDOM关联的DOM结点更新了，浏览器却没有机会渲染之。再者，将生命周期钩子声明为异步的并不会影响钩子触发的顺序，但是会影响钩子回调与状态更新引起的浏览器渲染之间的顺序。像下面两段代码，第一个例子我们不会看到浏览器渲染出最新的状态，但是通过DOM API能够看到DOM状态已更新；第二个例子则能够看到渲染发生，因为从事件循环的角度说`sleep`安排的timers任务是晚于`updated`事件触发时的渲染的：
+Vue文档中“挂载到DOM”的说法只是指创建挂载或Patch了DOM结点，并不意味着浏览器已经做了渲染。假如我们在`mounted`钩子或`updated`钩子里面做个无限的微任务队列，虽然VDOM关联的DOM结点更新了，浏览器却没有机会渲染之。再者，将生命周期钩子声明为异步的并不会影响钩子触发的顺序，但是会影响钩子回调与状态更新引起的浏览器渲染之间的顺序。像下面两段代码，第一个例子我们不会看到浏览器渲染出最新的状态，但是通过DOM API能够看到DOM状态已更新；第二个例子则能够看到渲染发生，因为从事件循环的角度说`sleep`安排的timers回调任务是晚于当前轮次`updated`之后的渲染的：
 
 ```js
 updated() {
@@ -1088,7 +1161,7 @@ Vue中的`nextTick`与`process.nextTick`的区别在于，它的实现曾经在�
 
 #### Vue Teleport组件
 
-#### Vue `v-if`和`v-show`
+#### Vue v-if和v-show
 
 `v-show`只是简单调整下`display`属性，不会破坏组件树，`v-if`则真的会删除重建整棵子树，因此会触发相应的生命周期事件，频繁切换的话开销也更大。
 
@@ -1108,19 +1181,13 @@ Jest加Testing-Utils基本满足了我的日常需求，E2E测试考虑Playwrigh
 
 技术细节等会再说，先谈谈选型的问题。Electron和Tauri主要对标Desktop，竞争的是以往QT/GTK的地位，我作为前端开发者还是很支持的，站在企业的角度招聘前端开发者比起招聘C++开发者也要轻松一点，前端生态也更丰富。不过比起QT/GTK确实存在性能差异。Electron还有个让人诟病的点是每个App里面都套个Chromium，应用体积过大也显得笨重。Tauri使用WebView规避了这一问题，底层又是用Rust开发的，性能上得到很大的提升，所以火起来也并不奇怪。Weex、RN和小程序的出现最早应该是因为H5容器的性能不足以满足业务要求，在Native层面做适配能充分发挥定制能力，但是随着服务端渲染技术的回归现在Web应用也可以获得几乎不逊色于原生App的体验，而小程序平台本身由于各个大厂竞相造轮子搞得乱象丛生的现状也让人望而却步。Flutter的问题在于Dart，这已经被人吐嘈过一万遍了，我也是很不理解为什么要重新制造一门语言来实现功能，看到很多解释都苍白无力，难道是大厂一贯的制造商业护城河吸引用户黏度的手段？
 
-### Electron
-
 Electron面临的一个重要技术问题就是整合两个事件循环，因为多数GUI框架都有自己的一套事件循环，而且通常必须是主线程，在Chromium中就是底层的`Message Loop`，而目标平台NodeJS，底层libuv，也是事件驱动的模型，有自己的事件循环。Electron核心开发者的[文章](https://www.electronjs.org/blog/electron-internals-node-integration)讲述了这个问题。
-
-### Tauri
-
-### React Native
 
 ## 服务端框架
 
 ### Express和Koa
 
-用烂了已经。其中间件解耦的方式目测是受到了函数式编程中`compose/flowRight`方法的启发，还是挺精巧的。
+用烂了已经。其中间件解耦的方式目测是受到了函数式编程中`compose/flowRight`方法的启发，还是挺精巧的。下面是一个笨笨的实现：
 
 ```ts
 const ctx: Context = {};

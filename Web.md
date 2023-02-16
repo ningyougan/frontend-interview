@@ -30,7 +30,7 @@
 
 宏任务的概念实际上并不存在，只是为了和微任务对应而附会的一个概念。[浏览器标准](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops)中相关的概念应该是Task，代表了诸如事件调度、timers回调、DOM、网络等任务。重点在8.1.7.3节Processing Model，每次完成一个任务会有一个微任务检查点，如果当前微任务队列不为空，则持续运行微任务直到队列为空，然后才会做一次Update the rendering。
 
-在屏幕上有一个`position: fixed`的按钮，像下面这段代码，点击按钮能明显看到按钮闪烁了一下，如果将`setTimeout`改为`queueMicrotask`则不会，这或许能作为Task和Microtask执行时机的一个例子，变更DOM是一次Task，执行完之后有一个微任务检查点，因此会先处理掉重置`btn.style.left`的回调再作渲染。而`setTimeout`创建的是Task，用`MessageChannel`和`setTimeout`是同样的效果。比较特殊的是`requestAnimationFrame`，虽然是宏任务，但从标准中可以看出它运行在Update the rendereing阶段，但处在Layout/Paint的小阶段之前，所以如果用`requestAnimationFrame`也不会闪烁。
+在屏幕上有一个`position: fixed`的按钮，像下面这段代码，点击按钮能明显看到按钮闪烁了一下，如果将`setTimeout`改为`queueMicrotask`则不会，这或许能作为Task和Microtask执行时机的一个例子，变更DOM是一次Task，执行完之后有一个微任务检查点，因此会先处理掉重置`btn.style.left`的回调再作渲染。而`setTimeout`创建的是Task，用`MessageChannel`和`setTimeout`是同样的效果。比较特殊的是`requestAnimationFrame`，虽然是宏任务，但从标准中可以看出它运行在Update the rendereing阶段，处在Layout/Paint的小阶段之前，所以如果用`requestAnimationFrame`也不会闪烁。
 
 ```js
 const btn = document.querySelector('button')!;
@@ -43,13 +43,13 @@ setTimeout(() => { btn.style.left = null; });
 
 ```js
 const btn = document.querySelector('button')!;
-const infinite = () => queueMicrotask(() => infinite());
+const block = () => queueMicrotask(() => block());
 
 btn.style.left = '100px';
 
 setTimeout(() => {
   btn.style.left = null;
-  infinite();
+  block();
 });
 ```
 
@@ -311,7 +311,7 @@ CSRF即“我成替身了”，不法分子通过社工等手段窃取用户的�
 
 移动端键盘主要解决的问题是如何确保其顶起页面，不会遮挡住处在页面下方的输入框，以及是否会使输入框失去焦点的问题。细分为原生键盘和前端H5键盘两类。
 
-1. 原生键盘：各个系统自带键盘的兼容性问题非常严重，也没有个统一的标准获取键盘弹起之后的时间、高度等信息。所以如果是App内，最佳的解决方案是由原生实现，并提供一些API给前端调用。如果非要在前端考虑各种边界情况的话，可参考[这篇文章](https://segmentfault.com/a/1190000018959389)。
+1. 原生键盘：各个系统自带键盘的兼容性问题非常严重，也没有个统一的标准获取键盘弹起之后的时间、高度等信息。所以如果是App内，最佳的解决方案是由原生实现，并提供一些API给前端调用。如果非要在前端考虑各种边界情况的话，可参考[这篇文章](https://segmentfault.com/a/1190000018959389)。我是觉得在前端兜是浪费人力的行为，因为前端做这种兼容都是根据不同机型的表现去单独处理，新机型层出不穷，相比起迭代发布持续维护，在原生层解决明显占优。
 
 2. H5键盘：前端实现的键盘就比较简单了，可以拿到键盘的实际高度去推高页面。
 

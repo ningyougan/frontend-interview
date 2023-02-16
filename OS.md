@@ -8,7 +8,7 @@
 + within a single process, multiple threads can run
 + within a single thread, multiple fibers can run
 
-进程是操作系统提供的抽象，线程是进程思想在软件层面的套用，协程则是单线程模型下的多任务调度，本质是延续的思想。协程与前两者的区别在于不是抢占式而是合作式调度，两个协程不会同时执行，因此不用考虑临界区互斥问题。Coroutine和Fiber的区别在于，Fiber通常有一个调度器，一个Fiber阻塞（block）之后控制权返回给调度器，而对称式Coroutine控制权转移到目标Coroutine、非对称式Coroutine转移到caller手中。
+进程是操作系统提供的抽象，线程是进程思想在软件层面的套用，协程则是单线程模型下的多任务调度，本质是延续的思想。协程与前两者的区别在于不是抢占式而是合作式调度，两个协程不会同时执行，因此不用考虑临界区互斥问题。Coroutine和Fiber的区别在于，Fiber通常有一个调度器，一个Fiber阻塞（block）之后控制权返回给调度器，而对称式Coroutine挂起（yield）之后控制权转移到目标Coroutine、非对称式Coroutine转移到caller手中。
 
 ### 并发和并行
 
