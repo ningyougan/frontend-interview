@@ -12,7 +12,13 @@
 
 ### `<div>`和`<span>`
 
-## 窗口大小和像素比
+## 设备像素比
+
+`window.devicePixelRatio`为1时，一个物理像素就和我们CSS中写的`1px`相对应，在移动端这个值往往会大于`1`，常见为`2`，所以我们拿到设计师给的750\*1334的切图之后，实际要除以2才和iPhone 375\*667的屏幕大小适配。
+
+### 移动端适配
+
+我们之前是使用的`postcss-px-to-viewport`做适配，再之前一点是`rem`去做适配。
 
 ## Ajax和`fetch`
 
@@ -239,11 +245,13 @@ export class HistoryRouter extends BaseRouter {
 
 两个网址只有在协议、端口和主机字段相同的时候才被当作是同源的，因此HTTP和HTTPS被认为是不同源，二级域名不同也被认为是不同源。出于安全考虑，在不同源的情况下，Cookie、localStorage和IndexDB无法读取，AJAX请求也不能发送，DOM无法获得（常出现于`<iframe>`）。
 
-很多时候需要绕过这些限制，AJAX请求通常采用下面会介绍的CORS方法，因此这里简要介绍下另外两类问题跨源时绕过的方式：
+很多时候需要绕过这些限制，AJAX请求可以使用JSONP，但古老且限制太多，一般采用下面会介绍的CORS方法，因此这里简要介绍下另外两类问题跨源时绕过的方式：
 
 1. Cookie：对于一级域名相同，二级域名不同的网页，可以通过手动设置`document.domain`的方式共享Cookie；另一种方法是服务器在设置Cookie的时候指定Cookie所属的域名；
 
 2. iframe（囊括了localStorage/IndexDB）：存在一些技巧性的方法，但系统的解决还是推荐`window.postMessage`。
+
+### CORS
 
 CORS，因为O代表的是“origin”所以它更应该被称为“跨源资源共享”，是一种通过额外的[HTTP响应头](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#the_http_response_headers)，让服务器有能力标示除了自身以外的其它源（域、协议或端口），浏览器看到这些HTTP头会放开默认的同源策略。
 
