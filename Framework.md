@@ -1126,7 +1126,7 @@ async updated() {
 3. beforeMount: 挂载之前调用，子组件在这之后才创建；
 4. mounted: 整棵子树（仅同步子组件）已被挂载到DOM上，此时`$el`可用；
 5. beforeUpdate: Diff之后，Patch之前，此时状态已更新，但还没有反馈到DOM结点上；
-6. updated: Patch之后，此时DOM已更新，但浏览器还未渲染，因此如果要访问渲染后的DOM需使用`nextTick`；
+6. updated: Patch之后，此时DOM已更新，但浏览器还未渲染；
 7. beforeUnmount: 组件被卸载之前，此时组件还保有全部功能；
 8. unmount: 整棵子树已卸载，常被用来做一些清理工作；
 9.  activated: 和mounted类似，用于被缓存的组件；

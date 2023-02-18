@@ -10,7 +10,7 @@
 
 两者都不会阻塞浏览器解析DOM的过程，`defer`和`async`的区别在于，`defer`脚本还包含在整个加载流程内，它总是在DOM解析完毕，`DOMContentLoaded`事件之前执行；而`async`脚本完全独立，什么时候加载好就什么时间执行，和`DOMContentLoaded`事件的顺序无法确定。
 
-### `<div>`和`<span>`
+### preload和prefetch
 
 ## 设备像素比
 
@@ -36,7 +36,7 @@
 
 宏任务的概念实际上并不存在，只是为了和微任务对应而附会的一个概念。[浏览器标准](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops)中相关的概念应该是Task，代表了诸如事件调度、timers回调、DOM、网络等任务。重点在8.1.7.3节Processing Model，每次完成一个任务会有一个微任务检查点，如果当前微任务队列不为空，则持续运行微任务直到队列为空，然后才会做一次Update the rendering。
 
-在屏幕上有一个`position: fixed`的按钮，像下面这段代码，点击按钮能明显看到按钮闪烁了一下，如果将`setTimeout`改为`queueMicrotask`则不会，这或许能作为Task和Microtask执行时机的一个例子，变更DOM是一次Task，执行完之后有一个微任务检查点，因此会先处理掉重置`btn.style.left`的回调再作渲染。而`setTimeout`创建的是Task，用`MessageChannel`和`setTimeout`是同样的效果。比较特殊的是`requestAnimationFrame`，虽然是宏任务，但从标准中可以看出它运行在Update the rendereing阶段，处在Layout/Paint的小阶段之前，所以如果用`requestAnimationFrame`也不会闪烁。
+在屏幕上有一个绝对定位的按钮，像下面这段代码，点击按钮能明显看到按钮闪烁了一下，如果将`setTimeout`改为`queueMicrotask`则不会，这或许能作为Task和Microtask执行时机的一个例子，变更DOM是一次Task，执行完之后有一个微任务检查点，因此会先处理掉`btn.style.left = null`的回调再作渲染。而`setTimeout`创建的是Task，排在本轮渲染之后，用`MessageChannel`和`setImmediate`是同样的效果。比较特殊的是`requestAnimationFrame`，虽然是宏任务，但从标准中可以看出它运行在渲染阶段，处在Layout/Paint小阶段之前，所以如果用`requestAnimationFrame`也不会闪烁。
 
 ```js
 const btn = document.querySelector('button')!;
@@ -92,7 +92,7 @@ setTimeout(() => {
 
 + timers: 已到期的`setTimeout`、`setInterval`回调在这里执行；
 + pending callbacks: 系统调用的结果回调，例如试图上报TCP错误`ECONNREFUSED`的行为；
-+ idle, prepare: NodeJS内部使用；
++ idle, prepare: 说是NodeJS内部使用；
 + poll: 取回新的I/O事件，处理除了`close`、timer和`setImmediate`回调之外几乎所有的I/O回调；
 + check: `setImmediate`回调在这里执行；
 + close callbacks: `close`事件有关的回调，例如`socket.on('close', callback)`。
@@ -113,7 +113,7 @@ setTimeout(() => {
     });
     ```
 
-    `readFile`的回调在poll阶段执行，随后poll队列为空，但是回调执行过程中调用了`setImmediate`，于是进入check阶段，下一轮再执行`setTimeout`的回调。
+    `readFile`的回调在poll阶段执行，随后poll队列为空，但是回调执行过程中调用了`setImmediate`，check队列不为空，于是进入check阶段，下一轮再执行`setTimeout`的回调。
 
 2. 如果去掉外侧的`readFile`则不一定了，下面代码`setTimeout`有可能在`setImmediate`前面执行：
 
@@ -145,7 +145,7 @@ setTimeout(() => {
 
 #### `process.nextTick()`
 
-NodeJS自己也吐嘈了，它的`nextTick`有立即执行的作用，而`setImmediate`却有下一个“tick”才执行的作用，这都是历史遗留的因素。按照官方的文档，不管当前是事件循环的哪一个阶段，nextTickQueue会在当前“操作”完成后立即处理，这里“操作”是来自NodeJS底层的概念，我推测代表的就是“宏任务”或者浏览器标准中的Task，一个Task之后清空微任务队列。故nextTickQueue作为微任务队列总是在进入下一个阶段前处理完，因此如果递归`nextTick`的话可能因为迟迟进入不了poll阶段造成I/O“饥饿”，和上面`infinite`的效果类似。
+NodeJS自己也吐嘈了，它的`nextTick`有立即执行的作用，而`setImmediate`却有下一个“tick”才执行的作用，这都是历史遗留的因素。按照官方的文档，不管当前是事件循环的哪一个阶段，nextTickQueue会在当前“操作”完成后立即处理，这里“操作”是来自NodeJS底层的概念，我推测代表的就是“宏任务”或者浏览器标准中的Task，一个Task之后清空微任务队列。故nextTickQueue作为微任务队列总是在进入下一个Task前处理完，因此如果递归`nextTick`的话可能因为迟迟进入不了poll阶段造成I/O“饥饿”，和上面`block`的效果类似。
 
 作为微任务，`process.nextTick()`优先级甚至比`Promise`还高，下面的代码会先输出`2`再输出`1`。
 
@@ -155,7 +155,7 @@ Promise.resolve().then(() => console.log('1'));
 process.nextTick(() => console.log('2'));
 ```
 
-在有了`queueMicrotask`之后，`process.nextTick()`可以被视为不推荐使用了，`queueMicrotask`创建的是和`Promise`同等优先级的微任务，便于梳理程序执行流。
+在有了`queueMicrotask`之后，`process.nextTick()`已经不推荐使用了，`queueMicrotask`创建的是和`Promise`同等优先级的微任务，便于梳理程序执行流。
 
 特别一提，现在还能找到一些文章说NodeJS的事件循环和浏览器的事件循环不同，NodeJS会在每个阶段之间才检查微任务队列，而非在一个宏任务之后就有一个微任务检查点，这是NodeJS@11版本之前的行为，早改了。
 
@@ -165,13 +165,13 @@ process.nextTick(() => console.log('2'));
 
 ## hash和history路由
 
-hash路由的原理是浏览器在监听到`hashchange`事件之后并不会刷新页面，这个功能本来是给页内锚点用的，所以使用hash路由的问题会导致没法做锚点了，如果还需要类似锚点功能的话可以自己`scrollIntoView()`，同时hash路由传参也不方便，需要序列化为URL字符串，还有长度限制。
+hash路由的原理是浏览器在监听到`hashchange`事件之后并不会刷新页面，这个功能本来是给页内锚点用的，所以使用hash路由会导致没法做锚点了，如果还需要类似锚点功能的话可以自己`scrollIntoView()`，同时hash路由传参也不方便，需要序列化为URL字符串，还有长度限制。
 
 history路由的原理在于history的几个API可以改变浏览器路由栈却不刷新页面，其中`pushState`和`replaceState`还可以改变页面URL，再配合`popstate`事件，可以实现路由效果。比较奇怪的是`pushState`和`replaceState`默认不会触发`popstate`事件，需要我们自己调度。
 
 在应用部署的时候，如果是通过Nginx之类的网关进行访问，history路由可能会面临一个fallback的问题，即未设置`try_uri`的情况下访问二级页面会404。
 
-Vue3两种模式的`vue-router`简要实现如下：
+Vue3两种模式的`vue-router`简要实现如下。其实完全可以在内存中维护路由栈，而非是由DOM事件驱动，真实的`vue-router`也的确是这样做的：
 
 ```js
 export const RouterView = defineComponent({
@@ -243,13 +243,15 @@ export class HistoryRouter extends BaseRouter {
 
 跨域问题也是前端开发中常见的问题了。搞清楚这个首先得了解浏览器的同源策略。
 
-两个网址只有在协议、端口和主机字段相同的时候才被当作是同源的，因此HTTP和HTTPS被认为是不同源，二级域名不同也被认为是不同源。出于安全考虑，在不同源的情况下，Cookie、localStorage和IndexDB无法读取，AJAX请求也不能发送，DOM无法获得（常出现于`<iframe>`）。
+两个网址只有在协议、端口和主机字段相同的时候才被当作是同源的，只要其中一种是不同的都属于跨域问题。因此HTTP和HTTPS被认为是不同源，二级域名不同也被认为是不同源。出于安全考虑，在不同源的情况下，Cookie、localStorage和IndexDB无法读取，AJAX请求也不能发送，DOM无法获得（常出现于`<iframe>`）。
 
-很多时候需要绕过这些限制，AJAX请求可以使用JSONP，但古老且限制太多，一般采用下面会介绍的CORS方法，因此这里简要介绍下另外两类问题跨源时绕过的方式：
+很多时候需要绕过这些限制，不同的问题解决方案也不同：
 
 1. Cookie：对于一级域名相同，二级域名不同的网页，可以通过手动设置`document.domain`的方式共享Cookie；另一种方法是服务器在设置Cookie的时候指定Cookie所属的域名；
 
 2. iframe（囊括了localStorage/IndexDB）：存在一些技巧性的方法，但系统的解决还是推荐`window.postMessage`。
+
+3. AJAX请求可以使用JSONP，核心思想是利用script请求可以跨域的特性，但古老且限制太多，例如只能使用GET等，一般采用下面会介绍的CORS方法。
 
 ### CORS
 

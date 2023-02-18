@@ -10,5 +10,7 @@
 
 ## Web Socket
 
+应用层协议，建立在TCP基础上。
+
 ## Web RTC
 
