@@ -169,7 +169,7 @@ hash路由的原理是浏览器在监听到`hashchange`事件之后并不会刷�
 
 history路由的原理在于history的几个API可以改变浏览器路由栈却不刷新页面，其中`pushState`和`replaceState`还可以改变页面URL，再配合`popstate`事件，可以实现路由效果。比较奇怪的是`pushState`和`replaceState`默认不会触发`popstate`事件，需要我们自己调度。
 
-在应用部署的时候，如果是通过Nginx之类的网关进行访问，history路由可能会面临一个fallback的问题，即未设置`try_uri`的情况下访问二级页面会404。
+在应用部署的时候，如果是通过Nginx之类的网关进行访问，history路由可能会面临一个fallback的问题，即未设置`try_files`的情况下访问二级页面会404。
 
 Vue3两种模式的`vue-router`简要实现如下。其实完全可以在内存中维护路由栈，而非是由DOM事件驱动，真实的`vue-router`也的确是这样做的：
 
